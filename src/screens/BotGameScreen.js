@@ -106,13 +106,16 @@ const BotGameScreen = ({ route, navigation }) => {
     if (furtherCaptures.length > 0 && wasCapture) {
       setCurrentPiecePos({ row: move.toRow, col: move.toCol });
       if (currentPlayer === 1) {
+        // Игрок продолжает
         setSelectedCell({ row: move.toRow, col: move.toCol });
         setValidMoves(furtherCaptures);
       } else {
+        // Бот продолжает – сбрасываем флаг, чтобы эффект бота сработал
         isBotThinkingRef.current = false;
-        setBotThinking(false);
+        setBotThinking(true);
       }
     } else {
+      // Нет дальнейших взятий – переключаем игрока
       setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       setCurrentPiecePos(null);
       setSelectedCell(null);
