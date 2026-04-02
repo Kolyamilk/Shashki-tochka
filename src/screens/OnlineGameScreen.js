@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ref, onValue, update, off, remove, get } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
+import { useInvite } from '../context/InviteContext';
 import {
   initialBoard,
   getValidMovesForPiece,
@@ -61,6 +62,7 @@ const updateStats = async (winnerId, loserId) => {
 const OnlineGameScreen = ({ route, navigation }) => {
   const { gameId, playerKey, myRole } = route.params;
   const [board, setBoard] = useState(initialBoard());
+    const { resetInviteFlags } = useInvite();  // ← Получите из контекста!
   const [gameData, setGameData] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
