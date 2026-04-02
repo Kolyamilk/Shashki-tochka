@@ -111,7 +111,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       }
     };
     fetchPlayerData();
-  }, [playerId, userId]);  // ← ← ← checkPlayerGameStatus НЕ в зависимостях здесь!
+  }, [playerId, userId]); 
 
   // Подписка на изменения приглашений (отправленные мной)
   useEffect(() => {

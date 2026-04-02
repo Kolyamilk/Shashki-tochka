@@ -51,31 +51,45 @@ const MenuScreen = ({ navigation }) => {
     }, [userData, topPlayers.length, fetchUserData, fetchTopPlayers])
   );
 
-  // ← Подписываемся на статусы игроков
+  // ← ← ← ИСПРАВЛЕННЫЙ useEffect для подсчета онлайн
   useEffect(() => {
+    console.log('📡 Подписка на статусы игроков');
+    
     const statusRef = ref(db, 'status');
     const unsubscribe = onValue(statusRef, (snapshot) => {
       const data = snapshot.val();
-      console.log('📊 Status data:', data);  // ← Для отладки
+      console.log('📊 Status data:', data ? Object.keys(data).length : 'empty');
       
       if (data) {
+        const now = Date.now();
+        
+        // ← ← ← КРИТИЧНО: считаем онлайн только если:
+        // 1. online === true
+        // 2. lastSeen < 5 минут назад (игрок действительно активен)
         const online = Object.entries(data)
           .filter(([id, status]) => {
-            console.log(`User ${id}: online=${status.online}, userId=${userId}`);  // ← Для отладки
-            return status.online === true;  // ← Считаем ВСЕХ онлайн
+            const isOnline = status.online === true;
+            const isRecent = status.lastSeen && (now - status.lastSeen < 300000); // 5 минут
+            console.log(`User ${id}: online=${isOnline}, recent=${isRecent}, lastSeen=${status.lastSeen}`);
+            return isOnline && isRecent;
           })
           .map(([id]) => id);
         
         setOnlineUsers(online);
         setOnlineCount(online.length);
-        console.log(`✅ Online count: ${online.length}`);  // ← Для отладки
+        console.log(`✅ Online count: ${online.length}`);
       } else {
         setOnlineUsers([]);
         setOnlineCount(0);
+        console.log('✅ Online count: 0 (no data)');
       }
     });
-    return () => off(statusRef);
-  }, []);  // ← Убрали userId из зависимостей
+    
+    return () => {
+      console.log('🧹 Очистка подписки на статусы');
+      off(statusRef);
+    };
+  }, []);  // ← ← ← Пустые зависимости - подписка создаётся один раз!
 
   const renderTopPlayer = ({ item, index }) => {
     const winRate = item.stats?.totalGames === 0 ? 0 : ((item.stats.wins / item.stats.totalGames) * 100).toFixed(1);
@@ -202,6 +216,8 @@ const MenuScreen = ({ navigation }) => {
     </View>
   );
 };
+
+// ← ← ← СТИЛИ (оставьте ваши существующие)
 
 const styles = StyleSheet.create({
   container: {
