@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { ref, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
+import VictoryModal from '../components/VictoryModal';
 import { useSettings } from '../context/SettingsContext';
 import { useGameType } from '../context/GameTypeContext';
 import {
@@ -37,6 +38,8 @@ const BotGameScreen = ({ route, navigation }) => {
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
   const [pendingMove, setPendingMove] = useState(null);
+  const [victoryModalVisible, setVictoryModalVisible] = useState(false);
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0 });
 
   const isAnimatingRef = useRef(false);
   const isBotThinkingRef = useRef(false);
@@ -78,6 +81,10 @@ const BotGameScreen = ({ route, navigation }) => {
       if (gameOver) return;
       setGameOver(true);
 
+      let expGained = 0;
+      let oldExp = 0;
+      const isWin = winner === 1;
+
       // Начисление опыта
       if (userId && winner !== null) {
         try {
@@ -85,7 +92,8 @@ const BotGameScreen = ({ route, navigation }) => {
           const statsSnap = await get(userStatsRef);
           const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
 
-          let expGained = 0;
+          oldExp = stats.exp || 0;
+
           if (winner === 1) {
             // Победа игрока
             if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
@@ -97,7 +105,7 @@ const BotGameScreen = ({ route, navigation }) => {
           }
 
           await update(userStatsRef, {
-            exp: (stats.exp || 0) + expGained,
+            exp: oldExp + expGained,
           });
           console.log(`✨ Начислено ${expGained} опыта`);
         } catch (error) {
@@ -115,9 +123,9 @@ const BotGameScreen = ({ route, navigation }) => {
     console.log('📝 Обновлён статус игры в bot_games');
       }
 
-      Alert.alert('Игра окончена', resultMessage, [
-        { text: 'Ок', onPress: () => navigation.goBack() }
-      ]);
+      // Показываем модальное окно победы
+      setVictoryData({ isWin, expGained, oldExp });
+      setVictoryModalVisible(true);
     };
 
     if (gameType === 'giveaway') {
@@ -398,6 +406,11 @@ const BotGameScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleVictoryClose = () => {
+    setVictoryModalVisible(false);
+    navigation.goBack();
+  };
+
   let captureMap = {};
   if (currentPlayer === 1 && !gameOver && !animatingMove && !isAnimatingRef.current) {
     for (let r = 0; r < BOARD_SIZE; r++) {
@@ -467,6 +480,14 @@ const BotGameScreen = ({ route, navigation }) => {
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
+
+      <VictoryModal
+        visible={victoryModalVisible}
+        isWin={victoryData.isWin}
+        expGained={victoryData.expGained}
+        oldExp={victoryData.oldExp}
+        onClose={handleVictoryClose}
+      />
     </View>
   );
 

@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ref, onValue, update, off, remove, get } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
+import VictoryModal from '../components/VictoryModal';
 import { useInvite } from '../context/InviteContext';
 import {
   initialBoard,
@@ -51,22 +52,27 @@ const updateStats = async (winnerId, loserId) => {
   const winnerStats = winnerSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
   const loserStats = loserSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
 
+  const winnerOldExp = winnerStats.exp || 0;
+  const loserOldExp = loserStats.exp || 0;
+
   await update(winnerRef, {
     totalGames: winnerStats.totalGames + 1,
     wins: winnerStats.wins + 1,
-    exp: (winnerStats.exp || 0) + EXP_REWARDS.WIN_ONLINE,
+    exp: winnerOldExp + EXP_REWARDS.WIN_ONLINE,
   });
   await update(loserRef, {
     totalGames: loserStats.totalGames + 1,
     wins: loserStats.wins,
-    exp: (loserStats.exp || 0) + EXP_REWARDS.LOSE_ONLINE,
+    exp: loserOldExp + EXP_REWARDS.LOSE_ONLINE,
   });
+
+  return { winnerOldExp, loserOldExp };
 };
 
 const OnlineGameScreen = ({ route, navigation }) => {
   const { gameId, playerKey, myRole } = route.params;
   const [board, setBoard] = useState(initialBoard());
-    const { resetInviteFlags } = useInvite();  // ← Получите из контекста!
+    const { resetInviteFlags } = useInvite();
   const [gameData, setGameData] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
@@ -76,6 +82,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [opponentAvatar, setOpponentAvatar] = useState('');
   const [myName, setMyName] = useState('');
   const [myAvatar, setMyAvatar] = useState('');
+  const [victoryModalVisible, setVictoryModalVisible] = useState(false);
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0 });
 
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
@@ -94,25 +102,37 @@ const OnlineGameScreen = ({ route, navigation }) => {
     if (isGameEnding.current) return;
     isGameEnding.current = true;
 
+    let expGained = 0;
+    let oldExp = 0;
+    const isWin = winnerId === playerKey;
+
     if (winnerId && loserId) {
       try {
-        await updateStats(winnerId, loserId);
+        const { winnerOldExp, loserOldExp } = await updateStats(winnerId, loserId);
+        if (isWin) {
+          expGained = EXP_REWARDS.WIN_ONLINE;
+          oldExp = winnerOldExp;
+        } else {
+          expGained = EXP_REWARDS.LOSE_ONLINE;
+          oldExp = loserOldExp;
+        }
       } catch (err) {
         console.error('Ошибка обновления статистики:', err);
       }
     }
-    Alert.alert('Игра окончена', resultMessage, [
-      { 
-        text: 'OK', 
-        onPress: async () => {
-          if (!isCleanupDone.current) {
-            isCleanupDone.current = true;
-            await cleanupGame(gameId);
-          }
-          navigation.replace('Menu');
-        }
-      }
-    ]);
+
+    // Показываем модальное окно победы
+    setVictoryData({ isWin, expGained, oldExp });
+    setVictoryModalVisible(true);
+  };
+
+  const handleVictoryClose = async () => {
+    setVictoryModalVisible(false);
+    if (!isCleanupDone.current) {
+      isCleanupDone.current = true;
+      await cleanupGame(gameId);
+    }
+    navigation.replace('Menu');
   };
 
   useEffect(() => {
@@ -581,6 +601,14 @@ const OnlineGameScreen = ({ route, navigation }) => {
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Выйти</Text>
       </TouchableOpacity>
+
+      <VictoryModal
+        visible={victoryModalVisible}
+        isWin={victoryData.isWin}
+        expGained={victoryData.expGained}
+        oldExp={victoryData.oldExp}
+        onClose={handleVictoryClose}
+      />
     </View>
   );
 };
