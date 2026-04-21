@@ -17,6 +17,7 @@ const ProfileScreen = ({ navigation }) => {
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
   const [saving, setSaving] = useState(false);
+  const [levelInfoModalVisible, setLevelInfoModalVisible] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -160,7 +161,15 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.levelContainer}>
           <View style={styles.levelHeader}>
             <Text style={styles.levelText}>Уровень {levelInfo.level}</Text>
-            <Text style={styles.rankText}>{rankName}</Text>
+            <View style={styles.levelHeaderRight}>
+              <Text style={styles.rankText}>{rankName}</Text>
+              <TouchableOpacity
+                style={styles.infoButton}
+                onPress={() => setLevelInfoModalVisible(true)}
+              >
+                <Text style={styles.infoButtonText}>ℹ️</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.progressBarContainer}>
@@ -249,6 +258,133 @@ const ProfileScreen = ({ navigation }) => {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модальное окно информации об уровнях */}
+      <Modal
+        visible={levelInfoModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setLevelInfoModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.infoModalContent}>
+            <Text style={styles.infoModalTitle}>📊 Система уровней</Text>
+
+            <ScrollView style={styles.infoScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.infoSection}>
+                <Text style={styles.infoSectionTitle}>💰 Начисление опыта</Text>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>🏆</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Победа онлайн</Text>
+                    <Text style={styles.infoValue}>+100 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>💪</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Поражение онлайн</Text>
+                    <Text style={styles.infoValue}>+50 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>🤖</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Победа над сложным ботом</Text>
+                    <Text style={styles.infoValue}>+80 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>🤖</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Победа над средним ботом</Text>
+                    <Text style={styles.infoValue}>+50 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>🤖</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Победа над легким ботом</Text>
+                    <Text style={styles.infoValue}>+30 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>😔</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Поражение от бота</Text>
+                    <Text style={styles.infoValue}>+20 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>👥</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Локальная игра</Text>
+                    <Text style={styles.infoValue}>0 опыта</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoSectionTitle}>⭐ Ранги игроков</Text>
+
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>1-4</Text>
+                  <Text style={styles.rankName}>🌱 Новичок</Text>
+                </View>
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>5-9</Text>
+                  <Text style={styles.rankName}>🥉 Любитель</Text>
+                </View>
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>10-19</Text>
+                  <Text style={styles.rankName}>🥈 Опытный</Text>
+                </View>
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>20-29</Text>
+                  <Text style={styles.rankName}>🥇 Профи</Text>
+                </View>
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>30-39</Text>
+                  <Text style={styles.rankName}>⭐ Эксперт</Text>
+                </View>
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>40-49</Text>
+                  <Text style={styles.rankName}>💎 Мастер</Text>
+                </View>
+                <View style={styles.rankRow}>
+                  <Text style={styles.rankLevel}>50+</Text>
+                  <Text style={styles.rankName}>🏆 Легенда</Text>
+                </View>
+              </View>
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoSectionTitle}>📈 Прогрессия</Text>
+                <Text style={styles.infoDescription}>
+                  Для каждого следующего уровня требуется на 100 опыта больше:{'\n\n'}
+                  • Уровень 1→2: 100 опыта{'\n'}
+                  • Уровень 2→3: 200 опыта{'\n'}
+                  • Уровень 3→4: 300 опыта{'\n'}
+                  и так далее...
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.infoCloseButton}
+              onPress={() => setLevelInfoModalVisible(false)}
+            >
+              <Text style={styles.infoCloseButtonText}>Понятно</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -380,6 +516,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  levelHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   levelText: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -389,6 +530,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#4ECDC4',
+  },
+  infoButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(78, 205, 196, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoButtonText: {
+    fontSize: 16,
   },
   progressBarContainer: {
     height: 12,
@@ -506,6 +658,96 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     fontSize: 18,
     marginBottom: 20,
+  },
+  infoModalContent: {
+    backgroundColor: '#2c3e50',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 450,
+    maxHeight: '80%',
+  },
+  infoModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textLight,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  infoScrollView: {
+    maxHeight: 450,
+  },
+  infoSection: {
+    marginBottom: 24,
+  },
+  infoSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4ECDC4',
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  infoEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  infoTextContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontSize: 15,
+    color: colors.textLight,
+  },
+  infoValue: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#4ECDC4',
+  },
+  rankRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  rankLevel: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#8e8e93',
+  },
+  rankName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textLight,
+  },
+  infoDescription: {
+    fontSize: 14,
+    color: '#8e8e93',
+    lineHeight: 20,
+  },
+  infoCloseButton: {
+    backgroundColor: '#4ECDC4',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  infoCloseButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
   },
 });
 
