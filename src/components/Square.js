@@ -15,7 +15,8 @@ const Square = ({ row, col, piece, onPress, isSelected, isValidMove, isCapture, 
         isValidMove && styles.validMove,
       ]}
       onPress={() => onPress(row, col)}
-      activeOpacity={0.7}
+      activeOpacity={0.5}
+      delayPressIn={0}
     >
       {piece && <Piece piece={piece} canCapture={isCapture} myRole={myRole} />}
       {isValidMove && <View style={styles.dot} />}

@@ -67,12 +67,12 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
     Animated.parallel([
       Animated.timing(translateX, {
         toValue: deltaX,
-        duration: 300,
+        duration: 200,
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: deltaY,
-        duration: 300,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start(() => {
