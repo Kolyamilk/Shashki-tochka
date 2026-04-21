@@ -1,9 +1,13 @@
 // src/screens/OnlineGameSetupScreen.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameType } from '../context/GameTypeContext';
+import { useAuth } from '../context/AuthContext';
+import { ref, get } from 'firebase/database';
+import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
+import { EXP_REWARDS, getLevelFromExp } from '../utils/levelSystem';
 
 const gameTypes = [
   {
@@ -22,7 +26,27 @@ const gameTypes = [
 
 const OnlineGameSetupScreen = ({ navigation }) => {
   const { gameType, setGameType } = useGameType();
+  const { userId } = useAuth();
+  const [currentLevel, setCurrentLevel] = useState(1);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const loadUserLevel = async () => {
+      if (!userId) return;
+      try {
+        const userStatsRef = ref(db, `users/${userId}/stats`);
+        const snapshot = await get(userStatsRef);
+        if (snapshot.exists()) {
+          const stats = snapshot.val();
+          const levelInfo = getLevelFromExp(stats.exp || 0);
+          setCurrentLevel(levelInfo.level);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки уровня:', error);
+      }
+    };
+    loadUserLevel();
+  }, [userId]);
 
   const handleStart = () => {
     navigation.navigate('FindOpponent');
@@ -39,6 +63,22 @@ const OnlineGameSetupScreen = ({ navigation }) => {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        {/* Текущий уровень */}
+        <View style={styles.levelBadge}>
+          <Text style={styles.levelBadgeText}>Ваш уровень: {currentLevel}</Text>
+        </View>
+
+        {/* Награды за игру */}
+        <View style={styles.rewardBox}>
+          <Text style={styles.rewardTitle}>💎 Награды</Text>
+          <View style={styles.rewardRow}>
+            <Text style={styles.rewardText}>Победа: +{EXP_REWARDS.WIN_ONLINE} опыта</Text>
+          </View>
+          <View style={styles.rewardRow}>
+            <Text style={styles.rewardText}>Поражение: +{EXP_REWARDS.LOSE_ONLINE} опыта</Text>
+          </View>
+        </View>
+
         <Text style={styles.subtitle}>Выберите режим игры</Text>
 
         {gameTypes.map((type) => (
@@ -118,6 +158,43 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  levelBadge: {
+    backgroundColor: '#4ECDC4',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  levelBadgeText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
+  },
+  rewardBox: {
+    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
+  rewardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#4ECDC4',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  rewardRow: {
+    marginBottom: 4,
+  },
+  rewardText: {
+    fontSize: 14,
+    color: colors.textLight,
+    textAlign: 'center',
+    fontWeight: '600',
   },
   subtitle: {
     fontSize: 18,

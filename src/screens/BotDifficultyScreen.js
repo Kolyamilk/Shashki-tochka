@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../styles/globalStyles';
 import { useGameType } from '../context/GameTypeContext';
+import { useAuth } from '../context/AuthContext';
+import { ref, get } from 'firebase/database';
+import { db } from '../firebase/config';
+import { EXP_REWARDS } from '../utils/levelSystem';
+import { getLevelFromExp } from '../utils/levelSystem';
 
 const difficulties = [
-  { name: 'Легкий', value: 'easy', description: 'Для начинающих' },
-  { name: 'Средний', value: 'medium', description: 'Для опытных игроков' },
-  { name: 'Тяжелый', value: 'hard', description: 'Для профессионалов' },
-  { name: 'Гроссмейстер', value: 'grandmaster', description: 'Максимальная сложность' },
+  { name: 'Легкий', value: 'easy', description: 'Для начинающих', expWin: EXP_REWARDS.WIN_BOT_EASY, expLose: EXP_REWARDS.LOSE_BOT },
+  { name: 'Средний', value: 'medium', description: 'Для опытных игроков', expWin: EXP_REWARDS.WIN_BOT_MEDIUM, expLose: EXP_REWARDS.LOSE_BOT },
+  { name: 'Тяжелый', value: 'hard', description: 'Для профессионалов', expWin: EXP_REWARDS.WIN_BOT_HARD, expLose: EXP_REWARDS.LOSE_BOT },
+  { name: 'Гроссмейстер', value: 'grandmaster', description: 'Максимальная сложность', expWin: EXP_REWARDS.WIN_BOT_HARD, expLose: EXP_REWARDS.LOSE_BOT },
 ];
 
 const gameTypes = [
@@ -18,8 +23,28 @@ const gameTypes = [
 
 const BotDifficultyScreen = ({ navigation }) => {
   const { gameType, setGameType } = useGameType();
+  const { userId } = useAuth();
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
+  const [currentLevel, setCurrentLevel] = useState(1);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const loadUserLevel = async () => {
+      if (!userId) return;
+      try {
+        const userStatsRef = ref(db, `users/${userId}/stats`);
+        const snapshot = await get(userStatsRef);
+        if (snapshot.exists()) {
+          const stats = snapshot.val();
+          const levelInfo = getLevelFromExp(stats.exp || 0);
+          setCurrentLevel(levelInfo.level);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки уровня:', error);
+      }
+    };
+    loadUserLevel();
+  }, [userId]);
 
   const handleStart = () => {
     if (selectedDifficulty) {
@@ -31,6 +56,11 @@ const BotDifficultyScreen = ({ navigation }) => {
     <View style={styles.wrapper}>
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 20) }]}>
       <Text style={styles.title}>Игра с компьютером</Text>
+
+      {/* Текущий уровень */}
+      <View style={styles.levelBadge}>
+        <Text style={styles.levelBadgeText}>Ваш уровень: {currentLevel}</Text>
+      </View>
 
       {/* Выбор режима игры */}
       <View style={styles.section}>
@@ -77,6 +107,10 @@ const BotDifficultyScreen = ({ navigation }) => {
                 {diff.name}
               </Text>
               <Text style={styles.difficultyDescription}>{diff.description}</Text>
+              <View style={styles.expInfo}>
+                <Text style={styles.expText}>Победа: +{diff.expWin} 💎</Text>
+                <Text style={styles.expText}>Поражение: +{diff.expLose} 💎</Text>
+              </View>
             </View>
             {selectedDifficulty === diff.value && (
               <Text style={styles.checkmark}>✓</Text>
@@ -120,8 +154,21 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.textLight,
-    marginBottom: 30,
+    marginBottom: 20,
     textAlign: 'center',
+  },
+  levelBadge: {
+    backgroundColor: '#4ECDC4',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  levelBadgeText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
   },
   section: {
     marginBottom: 30,
@@ -189,6 +236,16 @@ const styles = StyleSheet.create({
   difficultyDescription: {
     fontSize: 13,
     color: '#888',
+    marginBottom: 6,
+  },
+  expInfo: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  expText: {
+    fontSize: 12,
+    color: '#4ECDC4',
+    fontWeight: '600',
   },
   checkmark: {
     fontSize: 24,
