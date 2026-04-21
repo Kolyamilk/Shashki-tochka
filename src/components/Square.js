@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, View, StyleSheet, Text } from 'react-native';
+import { Pressable, View, StyleSheet, Text } from 'react-native';
 import Piece from './Piece';
 import { useSettings } from '../context/SettingsContext';
 
@@ -7,7 +7,7 @@ const Square = ({ row, col, piece, onPress, isSelected, isValidMove, isCapture, 
   const { boardLightColor, boardDarkColor } = useSettings();
   const isDark = (row + col) % 2 === 1;
   return (
-    <TouchableOpacity
+    <Pressable
       style={[
         styles.square,
         { backgroundColor: isDark ? boardDarkColor : boardLightColor },
@@ -15,13 +15,12 @@ const Square = ({ row, col, piece, onPress, isSelected, isValidMove, isCapture, 
         isValidMove && styles.validMove,
       ]}
       onPress={() => onPress(row, col)}
-      activeOpacity={0.5}
-      delayPressIn={0}
+      android_ripple={{ color: 'rgba(255, 255, 255, 0.1)' }}
     >
       {piece && <Piece piece={piece} canCapture={isCapture} myRole={myRole} />}
       {isValidMove && <View style={styles.dot} />}
-     
-    </TouchableOpacity>
+
+    </Pressable>
   );
 };
 
@@ -42,7 +41,6 @@ const styles = StyleSheet.create({
   selected: {
     borderWidth: 3,
     borderColor: '#FFD700',
-    transform: [{ scale: 1.02 }],
   },
   validMove: {
     backgroundColor: '#aaffaa80',

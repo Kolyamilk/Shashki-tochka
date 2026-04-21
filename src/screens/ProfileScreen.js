@@ -1,15 +1,21 @@
 // src/screens/ProfileScreen.js
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
-import { ref, get } from 'firebase/database';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, TextInput, Modal, ScrollView } from 'react-native';
+import { ref, get, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
+
+const AVATARS = ['😀', '😎', '🤓', '😇', '🥳', '🤠', '👻', '🤖', '👽', '🦄', '🐶', '🐱', '🐼', '🦊', '🐯', '🦁', '🐸', '🐵'];
 
 const ProfileScreen = ({ navigation }) => {
   const { userId, logout } = useAuth();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -54,9 +60,48 @@ const ProfileScreen = ({ navigation }) => {
   const goBack = () => {
     navigation.navigate('Menu');
   };
-  const giftScreen =()=>{
-    navigation.navigate('GiftScreen')
-  }
+
+  const giftScreen = () => {
+    navigation.navigate('GiftScreen');
+  };
+
+  const openEditModal = () => {
+    setEditName(userData.name);
+    setEditAvatar(userData.avatar);
+    setEditModalVisible(true);
+  };
+
+  const saveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Ошибка', 'Имя не может быть пустым');
+      return;
+    }
+    if (editName.trim().length < 2) {
+      Alert.alert('Ошибка', 'Имя должно содержать минимум 2 символа');
+      return;
+    }
+    if (editName.trim().length > 20) {
+      Alert.alert('Ошибка', 'Имя не должно превышать 20 символов');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      await update(userRef, {
+        name: editName.trim(),
+        avatar: editAvatar,
+      });
+      setUserData({ ...userData, name: editName.trim(), avatar: editAvatar });
+      setEditModalVisible(false);
+      Alert.alert('Успешно', 'Профиль обновлен');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Ошибка', 'Не удалось обновить профиль');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -86,20 +131,25 @@ const ProfileScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.avatar}>{userData.avatar}</Text>
-        <Text style={styles.name}>{userData.name} <TouchableOpacity  onPress={handleLogout}>
-          <Text style={styles.closeBtn}>x</Text>
+        <TouchableOpacity onPress={openEditModal} style={styles.avatarContainer}>
+          <Text style={styles.avatar}>{userData.avatar}</Text>
+          <View style={styles.editBadge}>
+            <Text style={styles.editBadgeText}>✏️</Text>
+          </View>
         </TouchableOpacity>
-        </Text>
 
-        <View style={styles.profileBtns}>
-           <TouchableOpacity onPress={giftScreen}>
-          <Text  style={styles.gift}>
-            🎁
-          </Text>
+        <View style={styles.nameContainer}>
+          <Text style={styles.name}>{userData.name}</Text>
+          <TouchableOpacity style={styles.logoutIconButton} onPress={handleLogout}>
+            <Text style={styles.closeBtn}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.giftButton} onPress={giftScreen}>
+          <Text style={styles.giftEmoji}>🎁</Text>
+          <Text style={styles.giftButtonText}>Мои подарки</Text>
         </TouchableOpacity>
-      </View>
-       
+
         <View style={styles.statsContainer}>
           <Text style={styles.statsText}>Сыграно игр: {totalGames}</Text>
           <Text style={styles.statsText}>Побед: {wins}</Text>
@@ -112,6 +162,73 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.buttonText}>Назад</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Модальное окно редактирования */}
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Редактировать профиль</Text>
+
+            <Text style={styles.label}>Аватар</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.avatarScroll}
+              contentContainerStyle={styles.avatarScrollContent}
+            >
+              {AVATARS.map((avatar) => (
+                <TouchableOpacity
+                  key={avatar}
+                  style={[
+                    styles.avatarOption,
+                    editAvatar === avatar && styles.avatarOptionSelected
+                  ]}
+                  onPress={() => setEditAvatar(avatar)}
+                >
+                  <Text style={styles.avatarOptionText}>{avatar}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.label}>Имя игрока</Text>
+            <TextInput
+              style={styles.input}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Введите имя"
+              placeholderTextColor="#8e8e93"
+              maxLength={20}
+            />
+            <Text style={styles.charCount}>{editName.length}/20</Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setEditModalVisible(false)}
+                disabled={saving}
+              >
+                <Text style={styles.modalButtonText}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveProfile}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonText}>Сохранить</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -128,15 +245,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
   avatar: {
     fontSize: 80,
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#4ECDC4',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  editBadgeText: {
+    fontSize: 14,
+  },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 20,
   },
   name: {
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.textLight,
-    marginBottom: 20,
+    marginRight: 12,
+  },
+  logoutIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 107, 107, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statsContainer: {
     backgroundColor: '#2c3e50',
@@ -167,27 +316,135 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
   },
-  closeBtn:{
-  color:'red',
-  fontSize:20,
-  fontWeight:'bold',
+  closeBtn: {
+    color: '#FF6B6B',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  giftButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c3e50',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  giftEmoji: {
+    fontSize: 28,
+    marginRight: 10,
+  },
+  giftButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textLight,
   },
   buttonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#2c3e50',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textLight,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textLight,
+    marginBottom: 10,
+    marginTop: 10,
+  },
+  avatarScroll: {
+    marginBottom: 10,
+  },
+  avatarScrollContent: {
+    paddingVertical: 8,
+  },
+  avatarOption: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  avatarOptionSelected: {
+    borderColor: '#4ECDC4',
+    backgroundColor: 'rgba(78, 205, 196, 0.3)',
+  },
+  avatarOptionText: {
+    fontSize: 32,
+  },
+  input: {
+    backgroundColor: '#1a2a3a',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: colors.textLight,
+    borderWidth: 1,
+    borderColor: '#4a5a6a',
+  },
+  charCount: {
+    fontSize: 12,
+    color: '#8e8e93',
+    textAlign: 'right',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#6c757d',
+  },
+  saveButton: {
+    backgroundColor: '#4ECDC4',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
   errorText: {
     color: colors.textLight,
     fontSize: 18,
     marginBottom: 20,
   },
-  profileBtns:{
-    marginBottom:20
-  },
-  gift:{
-    fontSize:50
-  }
 });
 
 export default ProfileScreen;

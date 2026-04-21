@@ -75,88 +75,27 @@ const giftsData = [
     from: 'Алексей',
     date: '18 мар 2025',
   },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-  
 ];
 
 const ProfileGiftScreen = ({ navigation }) => {
   const renderGiftItem = ({ item }) => (
     <TouchableOpacity
       style={styles.giftCard}
-      activeOpacity={0.7}
-      onPress={() => alert(`Подарок: ${item.name} от ${item.from}`)} // временное действие
+      activeOpacity={0.8}
+      onPress={() => alert(`${item.emoji} ${item.name}\n\nОт: ${item.from}\nДата: ${item.date}`)}
     >
-      <Text style={styles.giftEmoji}>{item.emoji}</Text>
-      <Text style={styles.giftName}>{item.name}</Text>
-      <Text style={styles.giftFrom}>от {item.from}</Text>
+      <View style={styles.giftEmojiContainer}>
+        <Text style={styles.giftEmoji}>{item.emoji}</Text>
+      </View>
+      <Text style={styles.giftName} numberOfLines={2}>{item.name}</Text>
+      <Text style={styles.giftFrom} numberOfLines={1}>от {item.from}</Text>
+      <Text style={styles.giftDate}>{item.date}</Text>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar/>
+      <StatusBar barStyle="light-content" />
       <View style={styles.container}>
         {/* Header с кнопкой назад */}
         <View style={styles.header}>
@@ -166,21 +105,28 @@ const ProfileGiftScreen = ({ navigation }) => {
           >
             <Text style={styles.backButtonText}>← Назад</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Мои подарки</Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Мои подарки</Text>
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{giftsData.length}</Text>
+            </View>
+          </View>
           <View style={styles.placeholderRight} />
         </View>
 
         {/* Сетка подарков */}
         <FlatList
           data={giftsData}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           numColumns={3}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.gridContent}
           renderItem={renderGiftItem}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Пока нет подарков 🎁</Text>
+              <Text style={styles.emptyEmoji}>🎁</Text>
+              <Text style={styles.emptyText}>Пока нет подарков</Text>
+              <Text style={styles.emptySubtext}>Подарки от других игроков появятся здесь</Text>
             </View>
           }
         />
@@ -192,11 +138,11 @@ const ProfileGiftScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   container: {
-    marginTop:50,
+    marginTop: 50,
     flex: 1,
-
   },
   header: {
     flexDirection: 'row',
@@ -204,6 +150,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: colors.background,
   },
   backButton: {
     paddingVertical: 8,
@@ -211,63 +158,108 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 17,
-    color: colors.primary || '#007aff',
-    fontWeight: '500',
+    color: colors.primary || '#4ECDC4',
+    fontWeight: '600',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textLight,
+    marginRight: 8,
+  },
+  countBadge: {
+    backgroundColor: '#4ECDC4',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  countText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1a2a3a',
   },
   placeholderRight: {
-    width: 60, // баланс для центрирования заголовка
+    width: 60,
   },
   gridContent: {
-    paddingHorizontal: 8,
-    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingTop: 16,
     paddingBottom: 20,
   },
   giftCard: {
     flex: 1,
-    margin: 8,
-    backgroundColor: colors.secondary,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
+    margin: 6,
+    backgroundColor: '#2c3e50',
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    minHeight: 140,
+  },
+  giftEmojiContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   giftEmoji: {
-    fontSize: 38,
-    marginBottom: 8,
+    fontSize: 36,
   },
   giftName: {
     fontSize: 13,
-    fontWeight: '500',
-    color: '#000000',
+    fontWeight: '600',
+    color: colors.textLight,
     textAlign: 'center',
     marginBottom: 4,
+    paddingHorizontal: 4,
   },
   giftFrom: {
     fontSize: 11,
-    color: '#000000',
+    color: '#4ECDC4',
     textAlign: 'center',
     marginBottom: 2,
+    fontWeight: '500',
   },
-
+  giftDate: {
+    fontSize: 10,
+    color: '#8e8e93',
+    textAlign: 'center',
+  },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 100,
+    paddingTop: 120,
+    paddingHorizontal: 40,
+  },
+  emptyEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.textLight,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
     color: '#8e8e93',
+    textAlign: 'center',
   },
 });
 

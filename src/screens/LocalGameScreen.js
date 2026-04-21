@@ -138,6 +138,10 @@ const LocalGameScreen = ({ navigation }) => {
   const handleSelectCell = (row, col) => {
     if (gameOver || animatingMove || isAnimatingRef.current) return;
 
+    // Проверяем, что клетка игровая (темная)
+    const isPlayableCell = (row + col) % 2 === 1;
+    if (!isPlayableCell) return;
+
     if (currentPiecePos) {
       if (row === currentPiecePos.row && col === currentPiecePos.col) {
         return;
@@ -181,9 +185,6 @@ const LocalGameScreen = ({ navigation }) => {
           capturedRow: move.capturedRow,
           capturedCol: move.capturedCol,
         });
-      } else {
-        setSelectedCell(null);
-        setValidMoves([]);
       }
     }
   };
