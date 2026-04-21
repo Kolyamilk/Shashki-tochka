@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../styles/globalStyles';
 import { useGameType } from '../context/GameTypeContext';
@@ -22,7 +22,7 @@ const gameTypes = [
 ];
 
 const BotDifficultyScreen = ({ navigation }) => {
-  const { gameType, setGameType } = useGameType();
+  const { gameType, setGameType, backgroundColor } = useGameType();
   const { userId } = useAuth();
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
   const [currentLevel, setCurrentLevel] = useState(1);
@@ -53,7 +53,7 @@ const BotDifficultyScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.wrapper}>
+    <Animated.View style={[styles.wrapper, { backgroundColor }]}>
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 20) }]}>
       <Text style={styles.title}>Игра с компьютером</Text>
 
@@ -136,15 +136,14 @@ const BotDifficultyScreen = ({ navigation }) => {
       >
         <Text style={styles.backButtonText}>Назад</Text>
       </TouchableOpacity>
-    </ScrollView>
-    </View>
+      </ScrollView>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   container: {
     flexGrow: 1,

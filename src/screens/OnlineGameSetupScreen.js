@@ -1,6 +1,6 @@
 // src/screens/OnlineGameSetupScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameType } from '../context/GameTypeContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,7 +25,7 @@ const gameTypes = [
 ];
 
 const OnlineGameSetupScreen = ({ navigation }) => {
-  const { gameType, setGameType } = useGameType();
+  const { gameType, setGameType, backgroundColor } = useGameType();
   const { userId } = useAuth();
   const [currentLevel, setCurrentLevel] = useState(1);
   const insets = useSafeAreaInsets();
@@ -53,7 +53,7 @@ const OnlineGameSetupScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← Назад</Text>
@@ -121,14 +121,13 @@ const OnlineGameSetupScreen = ({ navigation }) => {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -136,7 +135,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: '#444',
   },

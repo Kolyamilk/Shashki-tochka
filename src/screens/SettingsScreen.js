@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,49 +9,56 @@ import {
   Alert,
 } from 'react-native';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { colors } from '../styles/globalStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import Piece from '../components/Piece'; // добавили для превью
+import { ref, get } from 'firebase/database';
+import { db } from '../firebase/config';
+import { getLevelFromExp } from '../utils/levelSystem';
 
 
 // Пресеты для доски (6 вариантов)
 const boardPresets = [
-  { name: 'Классика', light: '#f0d9b5', dark: '#b58863' },
-  { name: 'Мрамор', light: '#e8e8e8', dark: '#a0a0a0' },
-  { name: 'Дуб', light: '#e3c194', dark: '#8b5a2b' },
-  { name: 'Лаванда', light: '#e6e6fa', dark: '#8a6e8b' },
-  { name: 'Мятный', light: '#d4f0d0', dark: '#6b8e6b' },
-  { name: 'Океан', light: '#c0e0ff', dark: '#2f6f8f' },
+  { name: 'Классика', light: '#f0d9b5', dark: '#b58863', requiredLevel: 1 },
+  { name: 'Мрамор', light: '#e8e8e8', dark: '#a0a0a0', requiredLevel: 2 },
+  { name: 'Дуб', light: '#e3c194', dark: '#8b5a2b', requiredLevel: 3 },
+  { name: 'Лаванда', light: '#e6e6fa', dark: '#8a6e8b', requiredLevel: 4 },
+  { name: 'Мятный', light: '#d4f0d0', dark: '#6b8e6b', requiredLevel: 5 },
+  { name: 'Океан', light: '#c0e0ff', dark: '#2f6f8f', requiredLevel: 6 },
+  { name: 'Закат', light: '#ffd4a3', dark: '#d9534f', requiredLevel: 7 },
+  { name: 'Ночь', light: '#4a5568', dark: '#1a202c', requiredLevel: 8 },
+  { name: 'Изумруд', light: '#a7f3d0', dark: '#047857', requiredLevel: 9 },
 ];
 
 // Пресеты для шашек (добавлен коричневый)
 const piecePresets = [
-  { name: 'Белый', color: '#FFFFFF' },
-  { name: 'Чёрный', color: '#333333' },
-  { name: 'Красный', color: '#FF4444' },
-  { name: 'Серый', color: '#d6d6d6' },
-  { name: 'Зелёный', color: '#44FF44' },
-  { name: 'Жёлтый', color: '#FFFF44' },
-  { name: 'Оранжевый', color: '#FF8800' },
-  { name: 'Фиолетовый', color: '#AA44FF' },
-  { name: 'Коричневый', color: '#8B4513' },
+  { name: 'Белый', color: '#FFFFFF', requiredLevel: 1 },
+  { name: 'Чёрный', color: '#333333', requiredLevel: 1 },
+  { name: 'Серый', color: '#d6d6d6', requiredLevel: 2 },
+  { name: 'Коричневый', color: '#8B4513', requiredLevel: 3 },
+  { name: 'Красный', color: '#FF4444', requiredLevel: 4 },
+  { name: 'Зелёный', color: '#44FF44', requiredLevel: 5 },
+  { name: 'Жёлтый', color: '#FFFF44', requiredLevel: 6 },
+  { name: 'Оранжевый', color: '#FF8800', requiredLevel: 7 },
+  { name: 'Фиолетовый', color: '#AA44FF', requiredLevel: 8 },
 ];
 
 // Пресеты для стиля дамки
 const kingStylePresets = [
-  { name: 'Корона', value: 'crown', preview: '👑' },
-  { name: 'Звезда', value: 'star', preview: '⭐' },
-  { name: 'Огонь', value: 'fire', preview: '🔥' },
-  { name: 'Бриллиант', value: 'diamond', preview: '💎' },
-  { name: 'Голубь', value: 'dove', preview: '🕊️' },
-  { name: 'Сердце', value: 'heart', preview: '♥️' },
-  { name: 'Какашки', value: 'poop', preview: '💩' },
-  { name: 'Квадрат', value: 'square', preview: '■' },
-  { name: 'Ромб', value: 'rhombus', preview: '◆' },
+  { name: 'Корона', value: 'crown', preview: '👑', requiredLevel: 1 },
+  { name: 'Королева', value: 'rhombus', preview: '♛', requiredLevel: 1 },
+  { name: 'Звезда', value: 'star', preview: '⭐', requiredLevel: 2 },
+  { name: 'Сердце', value: 'heart', preview: '♥️', requiredLevel: 3 },
+  { name: 'Бриллиант', value: 'diamond', preview: '💎', requiredLevel: 4 },
+  { name: 'Огонь', value: 'fire', preview: '🔥', requiredLevel: 5 },
+  { name: 'Голубь', value: 'dove', preview: '🕊️', requiredLevel: 6 },
+  { name: 'Молния', value: 'square', preview: '■', requiredLevel: 7 },
+  { name: 'Какашки', value: 'poop', preview: '💩', requiredLevel: 8 },
 ];
 
 // Модальное окно выбора цвета с блокировкой и значком замка
-const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, disabledColors = [] }) => {
+const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, disabledColors = [], userLevel = 1 }) => {
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalOverlay}>
@@ -60,6 +67,8 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
           <View style={styles.colorGrid}>
             {piecePresets.map((item) => {
               const isDisabled = disabledColors.includes(item.color);
+              const isLocked = userLevel < item.requiredLevel;
+              const cannotSelect = isDisabled || isLocked;
               return (
                 <TouchableOpacity
                   key={item.color}
@@ -69,17 +78,20 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
                     currentColor === item.color && styles.colorOptionSelected,
                   ]}
                   onPress={() => {
-                    if (!isDisabled) {
+                    if (!cannotSelect) {
                       onSelect(item.color);
                       onClose();
                     }
                   }}
-                  disabled={isDisabled}
+                  disabled={cannotSelect}
                   activeOpacity={0.7}
                 >
-                  {isDisabled && (
+                  {cannotSelect && (
                     <View style={styles.disabledOverlay}>
-                      <Text style={styles.lockIcon}>🔒</Text>
+                      <Text style={styles.lockIcon}>{isLocked ? '🔒' : '🔒'}</Text>
+                      {isLocked && (
+                        <Text style={styles.levelRequirement}>Ур. {item.requiredLevel}</Text>
+                      )}
                     </View>
                   )}
                 </TouchableOpacity>
@@ -95,7 +107,7 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
   );
 };
 
-const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title }) => {
+const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title, disabledStyles = [], userLevel = 1 }) => {
   const tempPiece = { player: 1, king: true };
 
   return (
@@ -104,28 +116,45 @@ const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title }) => 
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{title}</Text>
           <View style={styles.styleGrid}>
-            {kingStylePresets.map((item) => (
-              <TouchableOpacity
-                key={item.value}
-                style={[
-                  styles.styleOption,
-                  currentStyle === item.value && styles.styleOptionSelected,
-                ]}
-                onPress={() => {
-                  onSelect(item.value);
-                  onClose();
-                }}
-              >
-                <View style={styles.previewKingWrapper}>
-                  <Piece
-                    piece={tempPiece}
-                    canCapture={false}
-                    overrideKingStyle={item.value}
-                  />
-                </View>
-                <Text style={styles.styleName}>{item.name}</Text>
-              </TouchableOpacity>
-            ))}
+            {kingStylePresets.map((item) => {
+              const isDisabled = disabledStyles.includes(item.value);
+              const isLocked = userLevel < item.requiredLevel;
+              const cannotSelect = isDisabled || isLocked;
+              return (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[
+                    styles.styleOption,
+                    currentStyle === item.value && styles.styleOptionSelected,
+                  ]}
+                  onPress={() => {
+                    if (!cannotSelect) {
+                      onSelect(item.value);
+                      onClose();
+                    }
+                  }}
+                  disabled={cannotSelect}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.previewKingWrapper}>
+                    <Piece
+                      piece={tempPiece}
+                      canCapture={false}
+                      overrideKingStyle={item.value}
+                    />
+                  </View>
+                  <Text style={styles.styleName}>{item.name}</Text>
+                  {cannotSelect && (
+                    <View style={styles.disabledStyleOverlay}>
+                      <Text style={styles.lockIcon}>{isLocked ? '🔒' : '🔒'}</Text>
+                      {isLocked && (
+                        <Text style={styles.levelRequirement}>Ур. {item.requiredLevel}</Text>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
           <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
             <Text style={styles.modalCloseText}>Отмена</Text>
@@ -152,10 +181,30 @@ const InteractivePreviewBoard = () => {
     kingCrownColor,
   } = useSettings();
 
+  const { userId } = useAuth();
+  const [userLevel, setUserLevel] = useState(1);
   const [myColorModalVisible, setMyColorModalVisible] = useState(false);
   const [opponentColorModalVisible, setOpponentColorModalVisible] = useState(false);
   const [myKingStyleModalVisible, setMyKingStyleModalVisible] = useState(false);
   const [opponentKingStyleModalVisible, setOpponentKingStyleModalVisible] = useState(false);
+
+  useEffect(() => {
+    const loadUserLevel = async () => {
+      if (!userId) return;
+      try {
+        const userStatsRef = ref(db, `users/${userId}/stats`);
+        const snapshot = await get(userStatsRef);
+        if (snapshot.exists()) {
+          const stats = snapshot.val();
+          const levelInfo = getLevelFromExp(stats.exp || 0);
+          setUserLevel(levelInfo.level);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки уровня:', error);
+      }
+    };
+    loadUserLevel();
+  }, [userId]);
 
   const darkenColor = (color) => {
     if (color?.startsWith('#')) {
@@ -258,6 +307,7 @@ const InteractivePreviewBoard = () => {
         currentColor={myPieceColor}
         title="Цвет ваших шашек"
         disabledColors={[opponentPieceColor]}
+        userLevel={userLevel}
       />
       <ColorPickerModal
         visible={opponentColorModalVisible}
@@ -266,6 +316,7 @@ const InteractivePreviewBoard = () => {
         currentColor={opponentPieceColor}
         title="Цвет шашек противника"
         disabledColors={[myPieceColor]}
+        userLevel={userLevel}
       />
       <KingStyleModal
         visible={myKingStyleModalVisible}
@@ -273,6 +324,8 @@ const InteractivePreviewBoard = () => {
         onSelect={setMyKingStyle}
         currentStyle={myKingStyle}
         title="Стиль дамки (ваши фигуры)"
+        disabledStyles={[opponentKingStyle]}
+        userLevel={userLevel}
       />
       <KingStyleModal
         visible={opponentKingStyleModalVisible}
@@ -280,6 +333,8 @@ const InteractivePreviewBoard = () => {
         onSelect={setOpponentKingStyle}
         currentStyle={opponentKingStyle}
         title="Стиль дамки (противник)"
+        disabledStyles={[myKingStyle]}
+        userLevel={userLevel}
       />
     </>
   );
@@ -293,40 +348,96 @@ const SettingsScreen = ({ navigation }) => {
     setBoardDarkColor,
   } = useSettings();
 
+  const { userId } = useAuth();
+  const [userLevel, setUserLevel] = useState(1);
+
+  useEffect(() => {
+    const loadUserLevel = async () => {
+      if (!userId) return;
+      try {
+        const userStatsRef = ref(db, `users/${userId}/stats`);
+        const snapshot = await get(userStatsRef);
+        if (snapshot.exists()) {
+          const stats = snapshot.val();
+          const levelInfo = getLevelFromExp(stats.exp || 0);
+          setUserLevel(levelInfo.level);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки уровня:', error);
+      }
+    };
+    loadUserLevel();
+  }, [userId]);
+
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Настройки</Text>
+      <Text style={styles.title}>⚙️ Настройки</Text>
+
+      {/* Интерактивное превью */}
       <InteractivePreviewBoard />
-      <Text style={styles.categoryTitle}>Доска</Text>
-      <View style={styles.presetsGrid}>
-        {boardPresets.map((preset, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.presetItem,
-              (boardLightColor === preset.light && boardDarkColor === preset.dark) && styles.presetSelected,
-            ]}
-            onPress={() => {
-              setBoardLightColor(preset.light);
-              setBoardDarkColor(preset.dark);
-            }}
-          >
-            <View style={styles.boardPreview}>
-              <View style={styles.boardPreviewRow}>
-                <View style={[styles.boardPreviewCell, { backgroundColor: preset.light }]} />
-                <View style={[styles.boardPreviewCell, { backgroundColor: preset.dark }]} />
-              </View>
-              <View style={styles.boardPreviewRow}>
-                <View style={[styles.boardPreviewCell, { backgroundColor: preset.dark }]} />
-                <View style={[styles.boardPreviewCell, { backgroundColor: preset.light }]} />
-              </View>
-            </View>
-            <Text style={styles.presetName}>{preset.name}</Text>
-          </TouchableOpacity>
-        ))}
+
+      {/* Секция: Цвета доски */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🎨</Text>
+          <Text style={styles.categoryTitle}>Цвета доски</Text>
+        </View>
+        <Text style={styles.sectionDescription}>
+          Выберите цветовую схему для игровой доски
+        </Text>
+        <View style={styles.presetsGrid}>
+          {boardPresets.map((preset, index) => {
+            const isLocked = userLevel < preset.requiredLevel;
+            const isSelected = boardLightColor === preset.light && boardDarkColor === preset.dark;
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.presetItem,
+                  isSelected && styles.presetSelected,
+                  isLocked && styles.presetLocked,
+                ]}
+                onPress={() => {
+                  if (!isLocked) {
+                    setBoardLightColor(preset.light);
+                    setBoardDarkColor(preset.dark);
+                  }
+                }}
+                disabled={isLocked}
+                activeOpacity={0.7}
+              >
+                <View style={styles.boardPreview}>
+                  <View style={styles.boardPreviewRow}>
+                    <View style={[styles.boardPreviewCell, { backgroundColor: preset.light }]} />
+                    <View style={[styles.boardPreviewCell, { backgroundColor: preset.dark }]} />
+                  </View>
+                  <View style={styles.boardPreviewRow}>
+                    <View style={[styles.boardPreviewCell, { backgroundColor: preset.dark }]} />
+                    <View style={[styles.boardPreviewCell, { backgroundColor: preset.light }]} />
+                  </View>
+                </View>
+                <Text style={[styles.presetName, isLocked && styles.presetNameLocked]}>
+                  {preset.name}
+                </Text>
+                {isSelected && !isLocked && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+                {isLocked && (
+                  <View style={styles.boardLockBadge}>
+                    <Text style={styles.boardLockIcon}>🔒</Text>
+                    <Text style={styles.boardLockText}>Ур. {preset.requiredLevel}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
+
       <TouchableOpacity style={styles.saveButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.saveButtonText}>Назад</Text>
+        <Text style={styles.saveButtonText}>← Назад</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -351,6 +462,24 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     marginBottom: 16, // уменьшили
     textAlign: 'center',
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionIcon: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  sectionDescription: {
+    fontSize: 13,
+    color: '#aaa',
+    marginBottom: 12,
+    fontStyle: 'italic',
   },
   previewContainer: {
     backgroundColor: '#2c3e50',
@@ -432,16 +561,56 @@ const styles = StyleSheet.create({
     marginBottom: 8, // уменьшили
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
   },
   presetSelected: {
     borderColor: '#FFD700',
     backgroundColor: '#3a4a5a',
+  },
+  presetLocked: {
+    opacity: 0.6,
+  },
+  checkmark: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkmarkText: {
+    color: '#1a2a3a',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   presetName: {
     color: colors.textLight,
     marginTop: 4,
     fontSize: 12,
     textAlign: 'center',
+  },
+  presetNameLocked: {
+    color: '#888',
+  },
+  boardLockBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 8,
+    padding: 4,
+    alignItems: 'center',
+  },
+  boardLockIcon: {
+    fontSize: 14,
+  },
+  boardLockText: {
+    fontSize: 8,
+    color: '#FFD700',
+    fontWeight: 'bold',
   },
   boardPreview: {
     width: 48,
@@ -529,6 +698,15 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
+  levelRequirement: {
+    fontSize: 10,
+    color: '#FFD700',
+    fontWeight: 'bold',
+    marginTop: 2,
+    textShadowColor: '#000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
   styleGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -545,9 +723,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
   },
   styleOptionSelected: {
     borderColor: '#FFD700',
+  },
+  disabledStyleOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   stylePreview: {
     fontSize: 30,

@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native';
 import { useGameType } from '../context/GameTypeContext';
 import { colors } from '../styles/globalStyles';
 
 const GameTypeScreen = ({ navigation }) => {
-  const { gameType, setGameType } = useGameType();
+  const { gameType, setGameType, backgroundColor } = useGameType();
 
   const types = [
     {
@@ -25,7 +25,7 @@ const GameTypeScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { backgroundColor }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← Назад</Text>
@@ -51,14 +51,13 @@ const GameTypeScreen = ({ navigation }) => {
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',

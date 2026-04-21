@@ -61,6 +61,7 @@ const Piece = ({ piece, canCapture, overrideKingStyle }) => {
       case 'heart': return '♥️';
       case 'poop': return '💩';
       case 'square': return '■';
+      case 'rhombus': return '♛';
       default: return '👑';
     }
   };
@@ -76,9 +77,16 @@ const Piece = ({ piece, canCapture, overrideKingStyle }) => {
             end={{ x: 1, y: 1 }}
           />
         ) : (
-          <Text style={[styles.kingEmoji, { color: kingCrownColor }]}>
-            {renderKingSymbol()}
-          </Text>
+          <LinearGradient
+            colors={gradientColors}
+            style={styles.kingPiece}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.kingEmoji}>
+              {renderKingSymbol()}
+            </Text>
+          </LinearGradient>
         )}
       </Animated.View>
     </View>
@@ -106,10 +114,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#888',
   },
+  kingPiece: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#888',
+  },
   kingEmoji: {
-    fontSize: 26,
+    fontSize: 24,
     textAlign: 'center',
-    lineHeight: 36,
+    lineHeight: 32,
+    color: '#FFFFFF',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
 });
 
