@@ -99,6 +99,7 @@ const BotGameScreen = ({ route, navigation }) => {
             if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
             else if (difficulty === 'medium') expGained = EXP_REWARDS.WIN_BOT_MEDIUM;
             else if (difficulty === 'hard') expGained = EXP_REWARDS.WIN_BOT_HARD;
+            else if (difficulty === 'grandmaster') expGained = EXP_REWARDS.WIN_BOT_GRANDMASTER;
           } else if (winner === 2) {
             // Поражение от бота
             expGained = EXP_REWARDS.LOSE_BOT;

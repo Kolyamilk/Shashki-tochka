@@ -281,7 +281,7 @@ const ProfileScreen = ({ navigation }) => {
                   <Text style={styles.infoEmoji}>🏆</Text>
                   <View style={styles.infoTextContainer}>
                     <Text style={styles.infoLabel}>Победа онлайн</Text>
-                    <Text style={styles.infoValue}>+100 опыта</Text>
+                    <Text style={styles.infoValue}>+300 опыта</Text>
                   </View>
                 </View>
 
@@ -290,6 +290,14 @@ const ProfileScreen = ({ navigation }) => {
                   <View style={styles.infoTextContainer}>
                     <Text style={styles.infoLabel}>Поражение онлайн</Text>
                     <Text style={styles.infoValue}>+50 опыта</Text>
+                  </View>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoEmoji}>🤖</Text>
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Победа над гроссмейстером</Text>
+                    <Text style={styles.infoValue}>+100 опыта</Text>
                   </View>
                 </View>
 

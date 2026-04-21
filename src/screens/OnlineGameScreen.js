@@ -44,7 +44,7 @@ const cleanupGame = async (gameId) => {
   }
 };
 
-const updateStats = async (winnerId, loserId) => {
+const updateStats = async (winnerId, loserId, isSurrender = false) => {
   const winnerRef = ref(db, `users/${winnerId}/stats`);
   const loserRef = ref(db, `users/${loserId}/stats`);
   const winnerSnap = await get(winnerRef);
@@ -55,15 +55,18 @@ const updateStats = async (winnerId, loserId) => {
   const winnerOldExp = winnerStats.exp || 0;
   const loserOldExp = loserStats.exp || 0;
 
+  // Победитель всегда получает опыт
   await update(winnerRef, {
     totalGames: winnerStats.totalGames + 1,
     wins: winnerStats.wins + 1,
     exp: winnerOldExp + EXP_REWARDS.WIN_ONLINE,
   });
+
+  // Проигравший получает опыт только если не сдался
   await update(loserRef, {
     totalGames: loserStats.totalGames + 1,
     wins: loserStats.wins,
-    exp: loserOldExp + EXP_REWARDS.LOSE_ONLINE,
+    exp: loserOldExp + (isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE),
   });
 
   return { winnerOldExp, loserOldExp };
@@ -98,7 +101,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const lastBoardRef = useRef(null);
   const lastMoveWasMineRef = useRef(false);
 
-  const endGame = async (resultMessage, winnerId = null, loserId = null) => {
+  const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrender = false) => {
     if (isGameEnding.current) return;
     isGameEnding.current = true;
 
@@ -108,12 +111,13 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
     if (winnerId && loserId) {
       try {
-        const { winnerOldExp, loserOldExp } = await updateStats(winnerId, loserId);
+        const { winnerOldExp, loserOldExp } = await updateStats(winnerId, loserId, isSurrender);
         if (isWin) {
           expGained = EXP_REWARDS.WIN_ONLINE;
           oldExp = winnerOldExp;
         } else {
-          expGained = EXP_REWARDS.LOSE_ONLINE;
+          // Если игрок сдался, опыт не начисляется
+          expGained = isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE;
           oldExp = loserOldExp;
         }
       } catch (err) {
@@ -452,7 +456,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
               style: 'destructive',
               onPress: () => {
                 const opponentId = Object.keys(gameData?.players || {}).find(p => p !== playerKey);
-                if (opponentId) endGame('Вы сдались', opponentId, playerKey);
+                if (opponentId) endGame('Вы сдались', opponentId, playerKey, true);
                 else endGame('Вы сдались');
               },
             },
@@ -531,7 +535,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: () => {
             const opponentId = Object.keys(gameData?.players || {}).find(p => p !== playerKey);
-            if (opponentId) endGame('Вы сдались', opponentId, playerKey);
+            if (opponentId) endGame('Вы сдались', opponentId, playerKey, true);
             else endGame('Вы сдались');
           },
         },

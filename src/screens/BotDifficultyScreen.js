@@ -13,7 +13,7 @@ const difficulties = [
   { name: 'Легкий', value: 'easy', description: 'Для начинающих', expWin: EXP_REWARDS.WIN_BOT_EASY, expLose: EXP_REWARDS.LOSE_BOT },
   { name: 'Средний', value: 'medium', description: 'Для опытных игроков', expWin: EXP_REWARDS.WIN_BOT_MEDIUM, expLose: EXP_REWARDS.LOSE_BOT },
   { name: 'Тяжелый', value: 'hard', description: 'Для профессионалов', expWin: EXP_REWARDS.WIN_BOT_HARD, expLose: EXP_REWARDS.LOSE_BOT },
-  { name: 'Гроссмейстер', value: 'grandmaster', description: 'Максимальная сложность', expWin: EXP_REWARDS.WIN_BOT_HARD, expLose: EXP_REWARDS.LOSE_BOT },
+  { name: 'Гроссмейстер', value: 'grandmaster', description: 'Максимальная сложность', expWin: EXP_REWARDS.WIN_BOT_GRANDMASTER, expLose: EXP_REWARDS.LOSE_BOT },
 ];
 
 const gameTypes = [
