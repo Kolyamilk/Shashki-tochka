@@ -18,6 +18,8 @@ import {
 import { getBestMove } from '../utils/botLogic';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
+import { EXP_REWARDS } from '../utils/levelSystem';
+import { get } from 'firebase/database';
 
 const BotGameScreen = ({ route, navigation }) => {
   const { difficulty } = route.params;
@@ -76,9 +78,36 @@ const BotGameScreen = ({ route, navigation }) => {
       if (gameOver) return;
       setGameOver(true);
 
+      // Начисление опыта
+      if (userId && winner !== null) {
+        try {
+          const userStatsRef = ref(db, `users/${userId}/stats`);
+          const statsSnap = await get(userStatsRef);
+          const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+
+          let expGained = 0;
+          if (winner === 1) {
+            // Победа игрока
+            if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
+            else if (difficulty === 'medium') expGained = EXP_REWARDS.WIN_BOT_MEDIUM;
+            else if (difficulty === 'hard') expGained = EXP_REWARDS.WIN_BOT_HARD;
+          } else if (winner === 2) {
+            // Поражение от бота
+            expGained = EXP_REWARDS.LOSE_BOT;
+          }
+
+          await update(userStatsRef, {
+            exp: (stats.exp || 0) + expGained,
+          });
+          console.log(`✨ Начислено ${expGained} опыта`);
+        } catch (error) {
+          console.error('Ошибка начисления опыта:', error);
+        }
+      }
+
       if (gameIdRef.current) {
         const botGameRef = ref(db, `bot_games/${gameIdRef.current}`);
-       await update(botGameRef, {  // ← Используем update вместо set!
+       await update(botGameRef, {
       status: 'finished',
       finishedAt: Date.now(),
       result: winner === 1 ? 'player_win' : (winner === 2 ? 'bot_win' : 'draw'),

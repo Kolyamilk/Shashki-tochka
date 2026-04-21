@@ -5,6 +5,7 @@ import { ref, get, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
+import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 
 const AVATARS = ['😀', '😎', '🤓', '😇', '🥳', '🤠', '👻', '🤖', '👽', '🦄', '🐶', '🐱', '🐼', '🦊', '🐯', '🦁', '🐸', '🐵'];
 
@@ -125,8 +126,13 @@ const ProfileScreen = ({ navigation }) => {
     );
   }
 
-  const { totalGames, wins } = userData.stats;
+  const { totalGames, wins, exp = 0 } = userData.stats;
   const winRate = totalGames === 0 ? 0 : ((wins / totalGames) * 100).toFixed(1);
+
+  const levelInfo = getLevelFromExp(exp);
+  const rankName = getRankName(levelInfo.level);
+  const levelColor = getLevelColor(levelInfo.level);
+  const progress = levelInfo.currentLevelExp / levelInfo.expForNextLevel;
 
   return (
     <View style={styles.container}>
@@ -150,10 +156,27 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.giftButtonText}>Мои подарки</Text>
         </TouchableOpacity>
 
+        {/* Уровень и опыт */}
+        <View style={styles.levelContainer}>
+          <View style={styles.levelHeader}>
+            <Text style={styles.levelText}>Уровень {levelInfo.level}</Text>
+            <Text style={styles.rankText}>{rankName}</Text>
+          </View>
+
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: `${progress * 100}%`, backgroundColor: levelColor }]} />
+          </View>
+
+          <Text style={styles.expText}>
+            {levelInfo.currentLevelExp} / {levelInfo.expForNextLevel} опыта
+          </Text>
+        </View>
+
         <View style={styles.statsContainer}>
           <Text style={styles.statsText}>Сыграно игр: {totalGames}</Text>
           <Text style={styles.statsText}>Побед: {wins}</Text>
           <Text style={styles.statsText}>Процент побед: {winRate}%</Text>
+          <Text style={styles.statsText}>Всего опыта: {levelInfo.totalExp}</Text>
         </View>
       </View>
 
@@ -343,6 +366,45 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: colors.textLight,
+  },
+  levelContainer: {
+    backgroundColor: '#2c3e50',
+    padding: 20,
+    borderRadius: 20,
+    width: '100%',
+    marginBottom: 15,
+  },
+  levelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  levelText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textLight,
+  },
+  rankText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4ECDC4',
+  },
+  progressBarContainer: {
+    height: 12,
+    backgroundColor: '#1a2a3a',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  expText: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
   },
   buttonText: {
     color: '#fff',

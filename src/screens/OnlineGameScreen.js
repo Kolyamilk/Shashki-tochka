@@ -14,6 +14,7 @@ import {
   hasMoves,
   BOARD_SIZE
 } from '../utils/checkersLogic';
+import { EXP_REWARDS } from '../utils/levelSystem';
 import { colors } from '../styles/globalStyles';
 import { useSettings } from '../context/SettingsContext';
 
@@ -47,15 +48,18 @@ const updateStats = async (winnerId, loserId) => {
   const loserRef = ref(db, `users/${loserId}/stats`);
   const winnerSnap = await get(winnerRef);
   const loserSnap = await get(loserRef);
-  const winnerStats = winnerSnap.val() || { totalGames: 0, wins: 0 };
-  const loserStats = loserSnap.val() || { totalGames: 0, wins: 0 };
+  const winnerStats = winnerSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+  const loserStats = loserSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+
   await update(winnerRef, {
     totalGames: winnerStats.totalGames + 1,
     wins: winnerStats.wins + 1,
+    exp: (winnerStats.exp || 0) + EXP_REWARDS.WIN_ONLINE,
   });
   await update(loserRef, {
     totalGames: loserStats.totalGames + 1,
     wins: loserStats.wins,
+    exp: (loserStats.exp || 0) + EXP_REWARDS.LOSE_ONLINE,
   });
 };
 
