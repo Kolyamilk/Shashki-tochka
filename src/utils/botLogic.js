@@ -242,7 +242,7 @@ export const getBestMove = (board, player, difficulty, gameType = 'russian') => 
     }
 
     case 'grandmaster': {
-      const result = minimax(board, 6, -Infinity, Infinity, true, player, isGiveaway);
+      const result = minimax(board, 5, -Infinity, Infinity, true, player, isGiveaway);
       return result.move;
     }
 

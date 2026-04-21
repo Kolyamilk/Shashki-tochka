@@ -60,22 +60,24 @@ const kingStylePresets = [
 // Модальное окно выбора цвета с блокировкой и значком замка
 const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, disabledColors = [], userLevel = 1 }) => {
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalSubtitle}>Выберите цвет для ваших шашек</Text>
           <View style={styles.colorGrid}>
             {piecePresets.map((item) => {
               const isDisabled = disabledColors.includes(item.color);
               const isLocked = userLevel < item.requiredLevel;
               const cannotSelect = isDisabled || isLocked;
+              const isSelected = currentColor === item.color;
               return (
                 <TouchableOpacity
                   key={item.color}
                   style={[
                     styles.colorOption,
                     { backgroundColor: item.color },
-                    currentColor === item.color && styles.colorOptionSelected,
+                    isSelected && styles.colorOptionSelected,
                   ]}
                   onPress={() => {
                     if (!cannotSelect) {
@@ -86,6 +88,11 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
                   disabled={cannotSelect}
                   activeOpacity={0.7}
                 >
+                  {isSelected && !cannotSelect && (
+                    <View style={styles.selectedCheckmark}>
+                      <Text style={styles.selectedCheckmarkText}>✓</Text>
+                    </View>
+                  )}
                   {cannotSelect && (
                     <View style={styles.disabledOverlay}>
                       <Text style={styles.lockIcon}>{isLocked ? '🔒' : '🔒'}</Text>
@@ -94,12 +101,13 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
                       )}
                     </View>
                   )}
+                  <Text style={styles.colorName}>{item.name}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
           <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-            <Text style={styles.modalCloseText}>Отмена</Text>
+            <Text style={styles.modalCloseText}>Закрыть</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -107,8 +115,19 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
   );
 };
 
-const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title, disabledStyles = [], userLevel = 1 }) => {
+const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title, disabledStyles = [], userLevel = 1, pieceColor }) => {
   const tempPiece = { player: 1, king: true };
+
+  const darkenColor = (color) => {
+    if (color?.startsWith('#')) {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      const darker = (c) => Math.max(0, c - 40);
+      return `#${darker(r).toString(16).padStart(2, '0')}${darker(g).toString(16).padStart(2, '0')}${darker(b).toString(16).padStart(2, '0')}`;
+    }
+    return color;
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -137,11 +156,14 @@ const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title, disab
                   activeOpacity={0.7}
                 >
                   <View style={styles.previewKingWrapper}>
-                    <Piece
-                      piece={tempPiece}
-                      canCapture={false}
-                      overrideKingStyle={item.value}
-                    />
+                    <LinearGradient
+                      colors={[pieceColor, darkenColor(pieceColor)]}
+                      style={styles.previewKingCircle}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.previewKingSymbol}>{item.preview}</Text>
+                    </LinearGradient>
                   </View>
                   <Text style={styles.styleName}>{item.name}</Text>
                   {cannotSelect && (
@@ -326,6 +348,7 @@ const InteractivePreviewBoard = () => {
         title="Стиль дамки (ваши фигуры)"
         disabledStyles={[opponentKingStyle]}
         userLevel={userLevel}
+        pieceColor={myPieceColor}
       />
       <KingStyleModal
         visible={opponentKingStyleModalVisible}
@@ -335,6 +358,7 @@ const InteractivePreviewBoard = () => {
         title="Стиль дамки (противник)"
         disabledStyles={[myKingStyle]}
         userLevel={userLevel}
+        pieceColor={opponentPieceColor}
       />
     </>
   );
@@ -370,7 +394,7 @@ const SettingsScreen = ({ navigation }) => {
   }, [userId]);
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>⚙️ Настройки</Text>
 
       {/* Интерактивное превью */}
@@ -446,8 +470,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 16, // уменьшили общий отступ
-    paddingBottom: 10,
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 40,
   },
   previewKingEmoji: {
     fontSize: 24,
@@ -642,42 +668,91 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#2c3e50',
-    borderRadius: 20,
-    padding: 20,
-    width: '80%',
-    maxHeight: '70%',
+    backgroundColor: '#1a2a3a',
+    borderRadius: 24,
+    padding: 24,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: colors.primary,
-    marginBottom: 15,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#aaa',
+    marginBottom: 20,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   colorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: 15,
+    marginBottom: 20,
   },
   colorOption: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    margin: 6,
-    borderWidth: 2,
-    borderColor: '#ddd',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    margin: 8,
+    borderWidth: 3,
+    borderColor: '#444',
     backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+    position: 'relative',
   },
   colorOptionSelected: {
     borderColor: '#FFD700',
+    borderWidth: 4,
     transform: [{ scale: 1.05 }],
+  },
+  selectedCheckmark: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FFD700',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  selectedCheckmarkText: {
+    color: '#1a2a3a',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  colorName: {
+    position: 'absolute',
+    bottom: -20,
+    fontSize: 10,
+    color: '#aaa',
+    fontWeight: '600',
   },
   colorOptionDisabled: {
     opacity: 0.3,
@@ -737,6 +812,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  previewKingWrapper: {
+    marginBottom: 4,
+  },
+  previewKingCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#888',
+  },
+  previewKingSymbol: {
+    fontSize: 28,
+    color: '#FFFFFF',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
   stylePreview: {
     fontSize: 30,
     marginBottom: 4,
@@ -747,9 +841,14 @@ const styles = StyleSheet.create({
   },
   modalCloseButton: {
     backgroundColor: '#FF6B6B',
-    padding: 10,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 16,
     alignItems: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 5,
   },
   modalCloseText: {
     color: '#fff',
