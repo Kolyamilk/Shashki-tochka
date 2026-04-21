@@ -20,13 +20,20 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
   const translateX = new Animated.Value(0);
   const translateY = new Animated.Value(0);
 
-  // ← Вычисляем координаты
+  // ← Вычисляем координаты с учётом margin клеток и padding доски
   const getDisplayRow = (row) => (myRole === 1 ? 7 - row : row);
 
-  const fromX = from.col * cellSize;
-  const fromY = getDisplayRow(from.row) * cellSize;
-  const toX = to.col * cellSize;
-  const toY = getDisplayRow(to.row) * cellSize;
+  const squareSize = 45;
+  const squareMargin = 1;
+  const boardPadding = 4;
+
+  // Каждая клетка занимает squareSize + 2*margin
+  const cellTotalSize = squareSize + squareMargin * 2;
+
+  const fromX = from.col * cellTotalSize + squareMargin + boardPadding;
+  const fromY = getDisplayRow(from.row) * cellTotalSize + squareMargin + boardPadding;
+  const toX = to.col * cellTotalSize + squareMargin + boardPadding;
+  const toY = getDisplayRow(to.row) * cellTotalSize + squareMargin + boardPadding;
 
   const deltaX = toX - fromX;
   const deltaY = toY - fromY;

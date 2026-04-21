@@ -69,51 +69,107 @@ const applyMoveToBoard = (board, move) => {
 // Продвинутая оценочная функция
 const evaluateBoard = (board) => {
   let score = 0;
+  let player1Pieces = 0, player2Pieces = 0;
+  let player1Kings = 0, player2Kings = 0;
+
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const piece = board[r][c];
       if (piece) {
-        // Базовая ценность фигуры
-        let value = piece.king ? 3 : 1;
-        
-        // Бонус за положение на доске (центр важнее)
-        if (!piece.king) {
-          value += positionalWeights[r][c] * 0.1;
+        if (piece.player === 1) player1Pieces++;
+        else player2Pieces++;
+        if (piece.king) {
+          if (piece.player === 1) player1Kings++;
+          else player2Kings++;
         }
-        
-        // Бонус за продвижение вперёд (для обычных шашек)
+
+        // Базовая ценность фигуры (дамка ценнее)
+        let value = piece.king ? 5 : 1;
+
+        // Бонус за положение на доске
+        if (!piece.king) {
+          value += positionalWeights[r][c] * 0.15;
+        }
+
+        // Бонус за продвижение вперёд
         if (!piece.king) {
           const forwardProgress = piece.player === 1 ? r : 7 - r;
-          value += forwardProgress * 0.05;
+          value += forwardProgress * 0.1;
         }
-        
-        // Бонус за защищённость (наличие союзника рядом)
+
+        // Бонус за близость к превращению в дамку
+        if (!piece.king) {
+          const distanceToKing = piece.player === 1 ? (7 - r) : r;
+          if (distanceToKing <= 2) {
+            value += (3 - distanceToKing) * 0.4;
+          }
+        }
+
+        // Бонус за защищённость и атакующую позицию
         let protectionBonus = 0;
+        let attackBonus = 0;
+        let vulnerabilityPenalty = 0;
         const directions = [[-1,-1], [-1,1], [1,-1], [1,1]];
+
         for (let [dr, dc] of directions) {
           const nr = r + dr;
           const nc = c + dc;
           if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
             const neighbor = board[nr][nc];
-            if (neighbor && neighbor.player === piece.player) {
-              protectionBonus += 0.1;
+            if (neighbor) {
+              if (neighbor.player === piece.player) {
+                protectionBonus += 0.2;
+              } else {
+                // Можем ли атаковать
+                const jumpR = r + dr * 2;
+                const jumpC = c + dc * 2;
+                if (jumpR >= 0 && jumpR < BOARD_SIZE && jumpC >= 0 && jumpC < BOARD_SIZE && !board[jumpR][jumpC]) {
+                  attackBonus += 0.3;
+                }
+              }
+            }
+          }
+
+          // Проверка уязвимости
+          const attackerR = r - dr;
+          const attackerC = c - dc;
+          const landR = r + dr;
+          const landC = c + dc;
+          if (attackerR >= 0 && attackerR < BOARD_SIZE && attackerC >= 0 && attackerC < BOARD_SIZE &&
+              landR >= 0 && landR < BOARD_SIZE && landC >= 0 && landC < BOARD_SIZE) {
+            const attacker = board[attackerR][attackerC];
+            const landing = board[landR][landC];
+            if (attacker && attacker.player !== piece.player && !landing) {
+              vulnerabilityPenalty += 0.25;
             }
           }
         }
-        value += protectionBonus;
-        
+
+        value += protectionBonus + attackBonus - vulnerabilityPenalty;
+
         if (piece.player === 2) score += value;
         else score -= value;
       }
     }
   }
+
+  // Бонус за материальное преимущество
+  const pieceDiff = player2Pieces - player1Pieces;
+  score += pieceDiff * 0.6;
+
+  // Бонус за преимущество в дамках
+  const kingDiff = player2Kings - player1Kings;
+  score += kingDiff * 2;
+
   return score;
 };
 
 // Минимакс с альфа-бета отсечением
-const minimax = (board, depth, alpha, beta, maximizingPlayer, player) => {
+const minimax = (board, depth, alpha, beta, maximizingPlayer, player, isGiveaway = false) => {
   if (depth === 0) {
-    return { score: evaluateBoard(board), move: null };
+    let score = evaluateBoard(board);
+    if (isGiveaway) score = -score; // Инвертируем для поддавков
+    return { score, move: null };
   }
 
   const moves = getAllMoves(board, player);
@@ -126,7 +182,7 @@ const minimax = (board, depth, alpha, beta, maximizingPlayer, player) => {
     let bestMove = null;
     for (const move of moves) {
       const newBoard = applyMoveToBoard(board, move);
-      const result = minimax(newBoard, depth - 1, alpha, beta, false, player === 1 ? 2 : 1);
+      const result = minimax(newBoard, depth - 1, alpha, beta, false, player === 1 ? 2 : 1, isGiveaway);
       if (result.score > bestScore) {
         bestScore = result.score;
         bestMove = move;
@@ -140,7 +196,7 @@ const minimax = (board, depth, alpha, beta, maximizingPlayer, player) => {
     let bestMove = null;
     for (const move of moves) {
       const newBoard = applyMoveToBoard(board, move);
-      const result = minimax(newBoard, depth - 1, alpha, beta, true, player === 1 ? 2 : 1);
+      const result = minimax(newBoard, depth - 1, alpha, beta, true, player === 1 ? 2 : 1, isGiveaway);
       if (result.score < bestScore) {
         bestScore = result.score;
         bestMove = move;
@@ -153,21 +209,26 @@ const minimax = (board, depth, alpha, beta, maximizingPlayer, player) => {
 };
 
 // Главная функция для получения лучшего хода
-export const getBestMove = (board, player, difficulty) => {
+export const getBestMove = (board, player, difficulty, gameType = 'russian') => {
   const moves = getAllMoves(board, player);
   if (moves.length === 0) return null;
+
+  // В режиме поддавков инвертируем оценку
+  const isGiveaway = gameType === 'giveaway';
 
   switch (difficulty) {
     case 'easy':
       return moves[Math.floor(Math.random() * moves.length)];
 
     case 'medium': {
-      let bestScore = -Infinity;
+      let bestScore = isGiveaway ? Infinity : -Infinity;
       let bestMove = null;
       for (const move of moves) {
         const newBoard = applyMoveToBoard(board, move);
-        const score = evaluateBoard(newBoard);
-        if (score > bestScore) {
+        let score = evaluateBoard(newBoard);
+        if (isGiveaway) score = -score; // Инвертируем для поддавков
+
+        if (isGiveaway ? score < bestScore : score > bestScore) {
           bestScore = score;
           bestMove = move;
         }
@@ -176,12 +237,12 @@ export const getBestMove = (board, player, difficulty) => {
     }
 
     case 'hard': {
-      const result = minimax(board, 3, -Infinity, Infinity, true, player);
+      const result = minimax(board, 4, -Infinity, Infinity, true, player, isGiveaway);
       return result.move;
     }
 
     case 'grandmaster': {
-      const result = minimax(board, 5, -Infinity, Infinity, true, player);
+      const result = minimax(board, 6, -Infinity, Infinity, true, player, isGiveaway);
       return result.move;
     }
 

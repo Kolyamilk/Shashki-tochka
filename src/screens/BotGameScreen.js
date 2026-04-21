@@ -1,16 +1,18 @@
 // src/screens/BotGameScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
-import { ref, set, remove } from 'firebase/database';
+import { ref, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
 import { useSettings } from '../context/SettingsContext';
+import { useGameType } from '../context/GameTypeContext';
 import {
   initialBoard,
   getValidMovesForPiece,
   getCaptureMoves,
   hasAnyCapture,
   hasMoves,
+  checkGiveawayWinner,
   BOARD_SIZE,
 } from '../utils/checkersLogic';
 import { getBestMove } from '../utils/botLogic';
@@ -21,6 +23,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const { difficulty } = route.params;
   const { myPieceColor, opponentPieceColor } = useSettings();
   const { userId } = useAuth();
+  const { gameType } = useGameType();
   
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -32,11 +35,18 @@ const BotGameScreen = ({ route, navigation }) => {
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
   const [pendingMove, setPendingMove] = useState(null);
-  
+
   const isAnimatingRef = useRef(false);
   const isBotThinkingRef = useRef(false);
   const gameIdRef = useRef(null);
-  const botTurnTriggerRef = useRef(0);  // ← ← ← НОВОЕ: триггер для хода бота
+  const botTurnTriggerRef = useRef(0);
+
+  // Подсчёт съеденных шашек
+  const initialPiecesCount = 12;
+  const player1Pieces = board.flat().filter(p => p && p.player === 1).length;
+  const player2Pieces = board.flat().filter(p => p && p.player === 2).length;
+  const player1Captured = initialPiecesCount - player2Pieces;
+  const player2Captured = initialPiecesCount - player1Pieces;  // ← ← ← НОВОЕ: триггер для хода бота
 
   // ← При монтировании создаём запись в bot_games
   useEffect(() => {
@@ -81,14 +91,29 @@ const BotGameScreen = ({ route, navigation }) => {
       ]);
     };
 
-    if (!hasMoves(board, 1) && !hasMoves(board, 2)) {
-      endGame('Ничья!', null);
-    } else if (!hasMoves(board, 1)) {
-      endGame('Вы проиграли!', 2);
-    } else if (!hasMoves(board, 2)) {
-      endGame('Вы выиграли!', 1);
+    if (gameType === 'giveaway') {
+      // Режим поддавков: побеждает тот, кто первым отдал все фигуры или не может ходить
+      const winner1 = checkGiveawayWinner(board, 1);
+      const winner2 = checkGiveawayWinner(board, 2);
+
+      if (winner1 && winner2) {
+        endGame('Ничья!', null);
+      } else if (winner1) {
+        endGame('Вы победили! (отдали все фигуры)', 1);
+      } else if (winner2) {
+        endGame('Компьютер победил! (отдал все фигуры)', 2);
+      }
+    } else {
+      // Обычный режим: побеждает тот, кто съел все фигуры противника
+      if (!hasMoves(board, 1) && !hasMoves(board, 2)) {
+        endGame('Ничья!', null);
+      } else if (!hasMoves(board, 1)) {
+        endGame('Вы проиграли!', 2);
+      } else if (!hasMoves(board, 2)) {
+        endGame('Вы выиграли!', 1);
+      }
     }
-  }, [board, gameOver, userId, difficulty, navigation]);
+  }, [board, gameOver, userId, difficulty, navigation, gameType]);
 
   const onAnimationFinish = () => {
     if (!pendingMove) return;
@@ -231,7 +256,7 @@ const BotGameScreen = ({ route, navigation }) => {
     const timeout = setTimeout(() => {
       try {
         let move = null;
-        
+
         // ← ← ← Если есть продолжение серии взятий
         if (currentPiecePos) {
           console.log('🤖 Бот продолжает серию взятий с позиции:', currentPiecePos);
@@ -251,7 +276,7 @@ const BotGameScreen = ({ route, navigation }) => {
         } else {
           // ← ← ← Обычный ход бота
           console.log('🤖 Бот ищет лучший ход...');
-          move = getBestMove(board, 2, difficulty);
+          move = getBestMove(board, 2, difficulty, gameType);
         }
 
         if (move) {
@@ -269,7 +294,7 @@ const BotGameScreen = ({ route, navigation }) => {
         isBotThinkingRef.current = false;
         setBotThinking(false);
       }
-    }, 500);
+    }, difficulty === 'easy' ? 400 : difficulty === 'medium' ? 500 : difficulty === 'hard' ? 700 : 900);
     
     return () => clearTimeout(timeout);
   }, [
@@ -283,21 +308,18 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const handleSelectCell = (row, col) => {
     if (currentPlayer !== 1 || gameOver || botThinking || animatingMove || isAnimatingRef.current) {
-      console.log('⚠️ Ход заблокирован:', { 
-        currentPlayer, 
-        gameOver, 
-        botThinking, 
-        animatingMove: !!animatingMove, 
-        isAnimating: isAnimatingRef.current 
+      console.log('⚠️ Ход заблокирован:', {
+        currentPlayer,
+        gameOver,
+        botThinking,
+        animatingMove: !!animatingMove,
+        isAnimating: isAnimatingRef.current
       });
       return;
     }
 
     if (currentPiecePos) {
       if (row === currentPiecePos.row && col === currentPiecePos.col) {
-        setCurrentPiecePos(null);
-        setSelectedCell(null);
-        setValidMoves([]);
         return;
       }
       const move = validMoves.find(m => m.row === row && m.col === col);
@@ -319,8 +341,7 @@ const BotGameScreen = ({ route, navigation }) => {
 
     if (piece && piece.player === 1) {
       if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
-        setSelectedCell(null);
-        setValidMoves([]);
+        return;
       } else {
         setSelectedCell({ row, col });
         const moves = getValidMovesForPiece(board, row, col, 1, anyCapture);
@@ -363,20 +384,29 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const isMyTurn = currentPlayer === 1;
 
+  const gameTypeName = gameType === 'giveaway' ? '🎯 Поддавки' : '♟️ Русские шашки';
+
   return (
     <View style={styles.container}>
-      <View style={styles.turnIndicator}>
-        <Text style={[styles.turnTextBig, isMyTurn ? styles.myTurn : styles.opponentTurn]}>
-          {isMyTurn ? '⚡ Ваш ход' : '🤖 Думает...'}
-        </Text>
+      {/* Режим игры вверху */}
+      <View style={styles.header}>
+        <View style={styles.gameTypeIndicator}>
+          <Text style={styles.gameTypeText}>{gameTypeName}</Text>
+        </View>
       </View>
 
+      {/* Инфо о противнике с индикатором хода */}
       <View style={styles.opponentInfo}>
         <Text style={styles.opponentAvatar}>🤖</Text>
-        <Text style={styles.opponentName}>Компьютер</Text>
-        <View style={styles.capturedBadgeSmall}>
-          <Text style={styles.capturedTextSmall}>🍽️ 0</Text>
+        <Text style={styles.opponentName}>Бот</Text>
+        <View style={styles.capturedBadge}>
+          <Text style={styles.capturedText}>🍽️ {player2Captured}</Text>
         </View>
+        {!isMyTurn && (
+          <View style={styles.turnBadge}>
+            <Text style={styles.turnBadgeText}>🤖 Думает...</Text>
+          </View>
+        )}
       </View>
 
       <Board
@@ -393,11 +423,17 @@ const BotGameScreen = ({ route, navigation }) => {
       <View style={styles.playerInfo}>
         <Text style={styles.playerAvatar}>😀</Text>
         <Text style={styles.playerName}>Вы</Text>
-        <View style={styles.capturedBadgeSmall}>
-          <Text style={styles.capturedTextSmall}>🍽️ 0</Text>
+        <View style={styles.capturedBadge}>
+          <Text style={styles.capturedText}>🍽️ {player1Captured}</Text>
         </View>
+        {isMyTurn && (
+          <View style={styles.turnBadge}>
+            <Text style={styles.turnBadgeText}>⚡ Ваш ход</Text>
+          </View>
+        )}
       </View>
 
+      {/* Кнопка сдаться */}
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
@@ -436,72 +472,85 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a2a3a',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 110,
+    justifyContent: 'center',
   },
-  turnIndicator: {
-    marginTop: 30,
-    marginBottom: 20,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 40,
+  header: {
+    position: 'absolute',
+    top: 50,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  gameTypeIndicator: {
     backgroundColor: '#2c3e50',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  turnTextBig: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
+  gameTypeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4ECDC4',
   },
-  myTurn: { color: '#4ECDC4' },
-  opponentTurn: { color: '#FF6B6B' },
   opponentInfo: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    top: 110,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2c3e50',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 40,
-    marginLeft: 20,
-    marginBottom: 0,
+    borderRadius: 25,
+    zIndex: 10,
   },
-  opponentAvatar: { fontSize: 28, marginRight: 8 },
-  opponentName: { fontSize: 18, color: colors.textLight, fontWeight: '600', marginRight: 12 },
+  opponentAvatar: { fontSize: 24, marginRight: 8 },
+  opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
   playerInfo: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    bottom: 90,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2c3e50',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 40,
-    marginLeft: 20,
-    marginTop: 0,
+    borderRadius: 25,
+    zIndex: 10,
   },
-  playerAvatar: { fontSize: 28, marginRight: 8 },
-  playerName: { fontSize: 18, color: colors.textLight, fontWeight: '600', marginRight: 12 },
-  capturedBadgeSmall: {
+  playerAvatar: { fontSize: 24, marginRight: 8 },
+  playerName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
+  capturedBadge: {
     backgroundColor: 'rgba(0,0,0,0.3)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 15,
+    marginRight: 10,
   },
-  capturedTextSmall: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
+  capturedText: { fontSize: 13, fontWeight: 'bold', color: '#fff' },
+  turnBadge: {
+    backgroundColor: '#4ECDC4',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 15,
+  },
+  turnBadgeText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
   giveUpButton: {
     position: 'absolute',
     bottom: 30,
-    right: 30,
     backgroundColor: '#FF6B6B',
     paddingVertical: 10,
     paddingHorizontal: 24,
-    borderRadius: 25,
+    borderRadius: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
   },
-  giveUpText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  giveUpText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
 });
 
 export default BotGameScreen;

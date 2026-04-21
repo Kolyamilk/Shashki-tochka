@@ -179,3 +179,16 @@ export const countPieces = (board, player) => {
   }
   return count;
 };
+
+// Проверка окончания игры для режима поддавков
+export const checkGiveawayWinner = (board, player) => {
+  const playerPieces = countPieces(board, player);
+  const hasPlayerMoves = hasMoves(board, player);
+
+  // В поддавках побеждает тот, у кого нет фигур или нет ходов
+  if (playerPieces === 0 || !hasPlayerMoves) {
+    return player; // Этот игрок победил (отдал все фигуры)
+  }
+
+  return null; // Игра продолжается
+};

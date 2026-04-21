@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
@@ -17,6 +21,7 @@ const LoginScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const { userId, login } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Переход на Menu после успешного входа
   useEffect(() => {
@@ -63,35 +68,45 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Вход</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Имя"
-        value={name}
-        onChangeText={setName}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Пароль"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Войти</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.registerLink}
-        onPress={() => navigation.navigate('Register')}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) }]}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.linkText}>Нет аккаунта? Зарегистрироваться</Text>
-      </TouchableOpacity>
-    </View>
+        <Text style={styles.title}>Вход</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Имя"
+          placeholderTextColor="#aaa"
+          value={name}
+          onChangeText={setName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Пароль"
+          placeholderTextColor="#aaa"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+
+        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+          <Text style={styles.buttonText}>Войти</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.registerLink}
+          onPress={() => navigation.navigate('Register')}
+        >
+          <Text style={styles.linkText}>Нет аккаунта? Зарегистрироваться</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -99,6 +114,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  content: {
+    flexGrow: 1,
     padding: 20,
     justifyContent: 'center',
   },

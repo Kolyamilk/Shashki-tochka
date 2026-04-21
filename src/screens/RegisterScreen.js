@@ -8,7 +8,10 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, push, set } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
@@ -21,6 +24,7 @@ const RegisterScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(avatars[0]);
   const { userId, login } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Если userId появился (после вызова login) – переходим в Menu
   useEffect(() => {
@@ -63,57 +67,70 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Регистрация</Text>
+    <KeyboardAvoidingView
+      style={styles.keyboardView}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>Регистрация</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Ваше имя"
-        value={name}
-        onChangeText={setName}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Ваше имя"
+          placeholderTextColor="#aaa"
+          value={name}
+          onChangeText={setName}
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Пароль"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Пароль"
+          placeholderTextColor="#aaa"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-      <Text style={styles.label}>Выберите аватар:</Text>
-      <View style={styles.avatarGrid}>
-        {avatars.map((avatar) => (
-          <TouchableOpacity
-            key={avatar}
-            style={[
-              styles.avatarOption,
-              selectedAvatar === avatar && styles.selectedAvatar,
-            ]}
-            onPress={() => setSelectedAvatar(avatar)}
-          >
-            <Text style={styles.avatarEmoji}>{avatar}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <Text style={styles.label}>Выберите аватар:</Text>
+        <View style={styles.avatarGrid}>
+          {avatars.map((avatar) => (
+            <TouchableOpacity
+              key={avatar}
+              style={[
+                styles.avatarOption,
+                selectedAvatar === avatar && styles.selectedAvatar,
+              ]}
+              onPress={() => setSelectedAvatar(avatar)}
+            >
+              <Text style={styles.avatarEmoji}>{avatar}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-        <Text style={styles.buttonText}>Зарегистрироваться</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-  style={styles.loginLink}
-  onPress={() => navigation.navigate('Login')}
->
-  <Text style={styles.linkText}>Уже есть аккаунт? Войти</Text>
-</TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
+          <Text style={styles.buttonText}>Зарегистрироваться</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.loginLink}
+          onPress={() => navigation.navigate('Login')}
+        >
+          <Text style={styles.linkText}>Уже есть аккаунт? Войти</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
+  keyboardView: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   container: {
     flexGrow: 1,
-    backgroundColor: colors.background,
     padding: 20,
     justifyContent: 'center',
   },

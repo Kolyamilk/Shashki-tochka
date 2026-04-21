@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
@@ -9,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 
 const MenuScreen = ({ navigation }) => {
   const { userId } = useAuth();
+  const insets = useSafeAreaInsets();
   const [userData, setUserData] = useState(null);
   const [topPlayers, setTopPlayers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -104,10 +106,10 @@ const MenuScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Онлайн бейдж */}
       <TouchableOpacity
-        style={styles.onlineContainer}
+        style={[styles.onlineContainer, { top: insets.top + 10 }]}
         onPress={() => navigation.navigate('Players')}
         activeOpacity={0.7}
       >
@@ -118,9 +120,9 @@ const MenuScreen = ({ navigation }) => {
       </TouchableOpacity>
 
       {/* Основной контент */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Заголовок */}
@@ -132,7 +134,7 @@ const MenuScreen = ({ navigation }) => {
         <View style={styles.centerContainer}>
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
-            onPress={() => navigation.navigate('FindOpponent')}
+            onPress={() => navigation.navigate('OnlineGameSetup')}
             activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>🎯 Найти соперника</Text>
@@ -147,19 +149,11 @@ const MenuScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.gameTypeButton]}
-            onPress={() => navigation.navigate('GameType')}
+            style={[styles.button, styles.localButton]}
+            onPress={() => navigation.navigate('LocalGameSetup')}
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>🎲 Тип игры</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.chatButton]}
-            onPress={() => navigation.navigate('Chat')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.buttonText}>💬 Чат</Text>
+            <Text style={styles.buttonText}>👥 Локальная игра</Text>
           </TouchableOpacity>
         </View>
 
@@ -234,7 +228,6 @@ const styles = StyleSheet.create({
   /* Онлайн бейдж */
   onlineContainer: {
     position: 'absolute',
-    top: 50,
     right: 16,
     zIndex: 10,
   },
@@ -301,11 +294,8 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: colors.secondary,
   },
-  gameTypeButton: {
-    backgroundColor: '#f39c12',
-  },
-  chatButton: {
-    backgroundColor: '#9b59b6',
+  localButton: {
+    backgroundColor: '#27ae60',
   },
   buttonText: {
     color: '#fff',

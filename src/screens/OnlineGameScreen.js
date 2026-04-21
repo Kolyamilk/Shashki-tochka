@@ -446,9 +446,6 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
     if (currentPiecePos) {
       if (row === currentPiecePos.row && col === currentPiecePos.col) {
-        setCurrentPiecePos(null);
-        setSelectedCell(null);
-        setValidMoves([]);
         return;
       }
       const move = validMoves.find(m => m.row === row && m.col === col);
@@ -470,8 +467,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
     if (piece && piece.player === myRole) {
       if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
-        setSelectedCell(null);
-        setValidMoves([]);
+        return;
       } else {
         setSelectedCell({ row, col });
         const moves = getValidMovesForPiece(board, row, col, myRole, anyCapture);
@@ -486,6 +482,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         applyMove({
           fromRow: selectedCell.row,
           fromCol: selectedCell.col,
+          toRow: move.row,
           toRow: move.row,
           toCol: move.col,
           capturedRow: move.capturedRow,

@@ -11,15 +11,18 @@ import { db } from './src/firebase/config';
 import { initialBoard } from './src/utils/checkersLogic';
 import MenuScreen from './src/screens/MenuScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import OnlineGameSetupScreen from './src/screens/OnlineGameSetupScreen';
+import InviteGameSetupScreen from './src/screens/InviteGameSetupScreen';
 import FindOpponentScreen from './src/screens/FindOpponentScreen';
 import OnlineGameScreen from './src/screens/OnlineGameScreen';
 import BotDifficultyScreen from './src/screens/BotDifficultyScreen';
 import BotGameScreen from './src/screens/BotGameScreen';
+import LocalGameSetupScreen from './src/screens/LocalGameSetupScreen';
+import LocalGameScreen from './src/screens/LocalGameScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
-import ChatScreen from './src/screens/ChatScreen';
 import PlayersScreen from './src/screens/PlayersScreen';
 import PlayerProfileScreen from './src/screens/PlayerProfileScreen';
 import { colors } from './src/styles/globalStyles';
@@ -88,7 +91,7 @@ function AppNavigator() {
 
     const invitationsRef = ref(db, 'invitations');
     const handler = async (snapshot) => {
-      console.log('🔥🔥🔥 Обработчик onValue сработал!');
+      console.log('🔥 Обработчик приглашений сработал!');
       const data = snapshot.val();
       if (!data) {
         console.log('📭 invitations пуст');
@@ -103,8 +106,7 @@ function AppNavigator() {
 
       console.log('📨 Всего приглашений:', Object.keys(data).length);
       for (const [invId, invData] of Object.entries(data)) {
-        console.log(`📋 Проверка приглашения ${invId}: from=${invData.from}, to=${invData.to}, status=${invData.status}`);
-        console.log(`   my userId: ${userId}, match: ${invData.to === userId}`);
+        console.log(`📋 Проверка приглашения ${invId}: from=${invData.from}, to=${invData.to}, status=${invData.status}, gameType=${invData.gameType}`);
 
         // 1. Входящее приглашение (получатель)
         if (invData.to === userId && invData.status === 'pending') {
@@ -113,17 +115,21 @@ function AppNavigator() {
             hasShownAlertFor.current.add(invId);
             currentAlertVisible.current = true;
             currentAlertInvId.current = invId;
+
+            const gameTypeName = invData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки';
+            const gameTypeEmoji = invData.gameType === 'giveaway' ? '🎯' : '♟️';
+
             console.log('🔔 Показываем Alert пользователю...');
             Alert.alert(
               'Приглашение в игру',
-              `${invData.fromName || 'Игрок'} хочет сыграть с вами!`,
+              `${invData.fromName || 'Игрок'} приглашает вас сыграть!\n\n${gameTypeEmoji} Режим: ${gameTypeName}`,
               [
                 {
                   text: 'Отказаться',
                   style: 'cancel',
                   onPress: async () => {
                     console.log(`❌ Отказ от приглашения ${invId}`);
-                    await update(ref(db, `invitations/${invId}`), { status: 'declined' });
+                    await remove(ref(db, `invitations/${invId}`));
                     currentAlertVisible.current = false;
                     currentAlertInvId.current = null;
                     hasShownAlertFor.current.delete(invId);
@@ -146,14 +152,16 @@ function AppNavigator() {
                     }
                     const gameId = invData.gameId || `invite_${invData.from}_${userId}_${Date.now()}`;
                     const gameRef = ref(db, 'games_checkers/' + gameId);
-                    await update(gameRef, {
+                    await set(gameRef, {
                       players: { [invData.from]: 1, [userId]: 2 },
                       board: initialBoard(),
                       turn: invData.from,
                       currentPlayer: invData.from,
                       status: 'active',
+                      gameType: invData.gameType || 'russian',
                       createdAt: Date.now(),
                     });
+                    console.log('🎮 Игра создана:', gameId);
                     await update(ref(db, `invitations/${invId}`), { status: 'accepted', gameId });
                     console.log('📝 Статус обновлён на accepted');
                     await remove(ref(db, `invitations/${invId}`));
@@ -181,21 +189,22 @@ function AppNavigator() {
         if (invData.from === userId && invData.status === 'accepted' && invData.gameId) {
           if (processedAccepted.current.has(invId)) {
             console.log('⚠️ Это accepted уже обработано');
-            return;
+            continue;
           }
           processedAccepted.current.add(invId);
-          console.log('✅✅✅ МОЁ ПРИГЛАШЕНИЕ ПРИНЯТО!');
+          console.log('✅ МОЁ ПРИГЛАШЕНИЕ ПРИНЯТО!');
           const gameCheckRef = ref(db, `games_checkers/${invData.gameId}`);
           const gameCheckSnap = await get(gameCheckRef);
           if (!gameCheckSnap.exists()) {
             console.log('❌ Игра не найдена, создаём заново...');
             const gameRef = ref(db, `games_checkers/${invData.gameId}`);
-            await update(gameRef, {
+            await set(gameRef, {
               players: { [userId]: 1, [invData.to]: 2 },
               board: initialBoard(),
               turn: userId,
               currentPlayer: userId,
               status: 'active',
+              gameType: invData.gameType || 'russian',
               createdAt: Date.now(),
             });
           }
@@ -387,16 +396,19 @@ function AppNavigator() {
             <>
               <Stack.Screen name="Menu" component={MenuScreen} />
               <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="OnlineGameSetup" component={OnlineGameSetupScreen} />
               <Stack.Screen name="FindOpponent" component={FindOpponentScreen} />
               <Stack.Screen name="OnlineGame" component={OnlineGameScreen} />
               <Stack.Screen name="BotDifficulty" component={BotDifficultyScreen} />
               <Stack.Screen name="BotGame" component={BotGameScreen} />
+              <Stack.Screen name="LocalGameSetup" component={LocalGameSetupScreen} />
+              <Stack.Screen name="LocalGame" component={LocalGameScreen} />
               <Stack.Screen name="GameType" component={GameTypeScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
-              <Stack.Screen name="Chat" component={ChatScreen} />
               <Stack.Screen name="Players" component={PlayersScreen} />
               <Stack.Screen name="PlayerProfile" component={PlayerProfileScreen} />
+              <Stack.Screen name="InviteGameSetup" component={InviteGameSetupScreen} />
               <Stack.Screen name="GiftScreen" component={ProfileGiftScreen} />
             </>
           )}

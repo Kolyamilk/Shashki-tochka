@@ -161,15 +161,14 @@ const FindOpponentScreen = ({ navigation }) => {
 
       timeoutId.current = setTimeout(() => {
         if (isMounted.current && !gameCreatedRef.current) {
-          setStatus('Соперник не найден. Попробуйте позже.');
+          console.log('⏰ Таймаут поиска - переход на игру с ботом');
           if (currentPlayerKey.current) {
             remove(ref(db, 'waiting_checkers/' + currentPlayerKey.current));
           }
-          Alert.alert('Поиск завершён', 'Соперник не найден', [
-            { text: 'ОК', onPress: () => navigation.goBack() }
-          ]);
+          gameCreatedRef.current = true;
+          navigation.replace('BotDifficulty');
         }
-      }, 30000);
+      }, 15000);
 
       return () => {
         isMounted.current = false;

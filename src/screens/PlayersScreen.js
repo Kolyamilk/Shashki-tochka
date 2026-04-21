@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
@@ -16,6 +17,7 @@ import { useAuth } from '../context/AuthContext';  // ← ← ← Импорти
 
 const PlayersScreen = ({ navigation }) => {
   const { userId } = useAuth();  // ← ← ← Получаем текущий userId
+  const insets = useSafeAreaInsets();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState({});
@@ -286,7 +288,7 @@ const PlayersScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← Назад</Text>
         </TouchableOpacity>
@@ -298,7 +300,7 @@ const PlayersScreen = ({ navigation }) => {
         data={sortedPlayers}
         keyExtractor={(item) => item?.id || Math.random().toString()}
         renderItem={renderPlayer}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 20) }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <Text style={styles.emptyText}>Нет других игроков</Text>
@@ -321,7 +323,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 50,
     paddingBottom: 12,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
   backButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.primary,
     borderRadius: 20,
   },
   backButtonText: {

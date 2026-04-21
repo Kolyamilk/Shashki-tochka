@@ -101,8 +101,13 @@ const PlayerProfileScreen = ({ route, navigation }) => {
         }
 
         await checkSentInvite();
-        await checkPlayerGameStatus();  // ← Вызываем после определения
+        await checkPlayerGameStatus();
         await checkPlayerHasPendingInvite();
+
+        // Проверяем, вернулись ли мы с экрана выбора режима
+        if (route.params?.sendInvite && route.params?.selectedGameType) {
+          await sendInviteWithGameType(route.params.selectedGameType);
+        }
       } catch (error) {
         console.error(error);
         Alert.alert('Ошибка', 'Не удалось загрузить данные игрока');
@@ -111,7 +116,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       }
     };
     fetchPlayerData();
-  }, [playerId, userId]); 
+  }, [playerId, userId, route.params]); 
 
   // Подписка на изменения приглашений (отправленные мной)
   useEffect(() => {
@@ -281,7 +286,22 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       return;
     }
 
+    // Переход на экран выбора режима игры
+    navigation.navigate('InviteGameSetup', {
+      playerId,
+      playerName: playerData?.name || 'Игрок'
+    });
+  };
+
+  const sendInviteWithGameType = async (gameType) => {
     try {
+      console.log('📨 Отправка приглашения с режимом:', gameType);
+
+      // Получаем данные отправителя
+      const myUserRef = ref(db, `users/${userId}`);
+      const mySnapshot = await get(myUserRef);
+      const myData = mySnapshot.exists() ? mySnapshot.val() : {};
+
       const invitationsRef = ref(db, 'invitations');
       const snapshot = await get(invitationsRef);
       if (snapshot.exists()) {
@@ -295,29 +315,31 @@ const PlayerProfileScreen = ({ route, navigation }) => {
         }
       }
 
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       const newInviteRef = push(ref(db, 'invitations'));
       const inviteData = {
         from: userId,
         to: playerId,
-        fromName: playerData?.name || 'Игрок',
-        fromAvatar: playerData?.avatar || '😀',
+        fromName: myData.name || 'Игрок',
+        fromAvatar: myData.avatar || '😀',
+        gameType: gameType,
         status: 'pending',
         createdAt: Date.now(),
         gameId: `private_${userId}_${playerId}_${Date.now()}`,
       };
       await set(newInviteRef, inviteData);
-      console.log('✅ Приглашение создано:', newInviteRef.key);
+      console.log('✅ Приглашение создано:', newInviteRef.key, 'с режимом:', gameType);
 
       await sendPushNotification(
         playerId,
         'Приглашение в игру',
-        `${playerData?.name || 'Игрок'} приглашает вас сыграть!`,
+        `${myData.name || 'Игрок'} приглашает вас сыграть!`,
         { type: 'game_invite', from: userId, inviteId: newInviteRef.key }
       );
 
       Alert.alert('Приглашение отправлено', 'Игрок получит уведомление');
+
+      // Очищаем параметры навигации
+      navigation.setParams({ sendInvite: false, selectedGameType: null });
     } catch (err) {
       console.error(err);
       Alert.alert('Ошибка', 'Не удалось отправить приглашение');
@@ -334,10 +356,6 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       console.error(err);
       Alert.alert('Ошибка', 'Не удалось отменить приглашение');
     }
-  };
-
-  const sendMessage = () => {
-    navigation.navigate('Chat', { openWithUser: playerId });
   };
 
   const sendGift = () => {
@@ -456,10 +474,6 @@ const PlayerProfileScreen = ({ route, navigation }) => {
               )}
             </>
           )}
-
-          <TouchableOpacity style={[styles.actionButton, styles.messageButton]} onPress={sendMessage}>
-            <Text style={styles.actionButtonText}>💬 Написать сообщение</Text>
-          </TouchableOpacity>
 
           <TouchableOpacity style={[styles.actionButton, styles.giftButton]} onPress={sendGift}>
             <Text style={styles.actionButtonText}>🎁 Отправить подарок</Text>
