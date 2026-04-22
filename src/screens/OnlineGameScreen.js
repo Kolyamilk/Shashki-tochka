@@ -758,32 +758,32 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
   }
 
-  return (
+return (
     <View style={styles.container}>
-      {/* Режим игры вверху */}
+      {/* Режим игры вверху – без изменений */}
       <View style={styles.header}>
         <View style={styles.gameTypeIndicator}>
           <Text style={styles.gameTypeText}>{gameTypeName}</Text>
         </View>
       </View>
 
-      <View style={styles.turnIndicator}>
-        <Text style={[styles.turnTextBig, isMyTurn ? styles.myTurn : styles.opponentTurn]}>
-          {isMyTurn ? '⚡ Ваш ход' : '⏳ Ход противника'}
-        </Text>
-      </View>
-
+      {/* ИНФОРМАЦИЯ О ПРОТИВНИКЕ (сверху) – теперь абсолютно и с бейджем хода */}
       <View style={styles.opponentInfo}>
-        <Text style={styles.opponentAvatar}>{opponentAvatar}</Text>
+        <Text style={styles.opponentAvatar}>{opponentAvatar || '😎'}</Text>
         <View style={styles.playerDetails}>
           <Text style={styles.opponentName}>{opponentName || 'Соперник'}</Text>
           <Text style={[styles.levelBadge, { color: getLevelColor(opponentLevel) }]}>
             ⭐ Ур. {opponentLevel}
           </Text>
         </View>
+        {!isMyTurn && (
+          <View style={styles.turnBadge}>
+            <Text style={styles.turnBadgeText}>⏳ Ход противника</Text>
+          </View>
+        )}
       </View>
 
-      {/* Съеденные шашки противника (сверху) - противник съел мои шашки */}
+      {/* Съеденные шашки противника (сверху) – без изменений */}
       <View style={styles.capturedRow}>
         {Array.from({ length: opponentCaptured }).map((_, index) => (
           <View
@@ -796,6 +796,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         ))}
       </View>
 
+      {/* Доска – без изменений */}
       <Board
         board={board}
         selectedCell={selectedCell}
@@ -807,7 +808,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         onAnimationFinish={onAnimationFinish}
       />
 
-      {/* Съеденные шашки игрока (снизу) - я съел шашки противника */}
+      {/* Съеденные шашки игрока (снизу) – без изменений */}
       <View style={styles.capturedRow}>
         {Array.from({ length: myCaptured }).map((_, index) => (
           <View
@@ -820,18 +821,25 @@ const OnlineGameScreen = ({ route, navigation }) => {
         ))}
       </View>
 
+      {/* ИНФОРМАЦИЯ ОБ ИГРОКЕ (снизу) – абсолютно и с бейджем хода */}
       <View style={styles.playerInfo}>
-        <Text style={styles.playerAvatar}>{myAvatar}</Text>
+        <Text style={styles.playerAvatar}>{myAvatar || '😀'}</Text>
         <View style={styles.playerDetails}>
           <Text style={styles.playerName}>{myName || 'Вы'}</Text>
           <Text style={[styles.levelBadge, { color: getLevelColor(myLevel) }]}>
             ⭐ Ур. {myLevel}
           </Text>
         </View>
+        {isMyTurn && (
+          <View style={styles.turnBadge}>
+            <Text style={styles.turnBadgeText}>⚡ Ваш ход</Text>
+          </View>
+        )}
       </View>
 
+      {/* КНОПКА СДАЧИ – теперь по центру внизу, как в игре с ботом */}
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
-        <Text style={styles.giveUpText}>🏳️ Сдаться</Text>
+        <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
 
       <VictoryModal
@@ -853,7 +861,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a2a3a',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
   },
   header: {
     position: 'absolute',
@@ -895,72 +902,73 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  turnIndicator: {
-    marginBottom: 10,
-    marginTop: 10,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 40,
-    backgroundColor: '#2c3e50',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  turnTextBig: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  myTurn: { color: '#4ECDC4' },
-  opponentTurn: { color: '#FF6B6B' },
+  // Новые стили для opponentInfo и playerInfo – абсолютное позиционирование
   opponentInfo: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    top: 110,
+    left: 20,            // как в боте (но можно оставить и без left – тогда будет прижат к левому краю)
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2c3e50',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 40,
-    marginLeft: 20,
-    marginBottom: 10,
+    borderRadius: 25,
+    zIndex: 10,
   },
-  opponentAvatar: { fontSize: 28, marginRight: 8 },
+  playerInfo: {
+    position: 'absolute',
+    bottom: 90,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c3e50',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 25,
+    zIndex: 10,
+  },
+  opponentAvatar: { fontSize: 24, marginRight: 8 },
   opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600' },
+  playerAvatar: { fontSize: 24, marginRight: 8 },
+  playerName: { fontSize: 14, color: colors.textLight, fontWeight: '600' },
   playerDetails: {
     flexDirection: 'column',
-    marginRight: 12,
+    marginRight: 10,
   },
   levelBadge: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
     marginTop: 2,
   },
-  playerInfo: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2c3e50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 40,
-    marginLeft: 20,
-    marginTop: 10,
+  turnBadge: {
+    backgroundColor: '#4ECDC4',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 15,
+    marginLeft: 8,
   },
-  playerAvatar: { fontSize: 28, marginRight: 8 },
-  playerName: { fontSize: 16, color: colors.textLight, fontWeight: '600' },
+  turnBadgeText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
   giveUpButton: {
     position: 'absolute',
     bottom: 30,
-    right: 30,
     backgroundColor: '#FF6B6B',
     paddingVertical: 10,
     paddingHorizontal: 24,
-    borderRadius: 25,
+    borderRadius: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
   },
-  giveUpText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  giveUpText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   status: { color: colors.textLight, fontSize: 18 },
 });
+
 
 export default OnlineGameScreen;
