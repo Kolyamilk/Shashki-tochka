@@ -1,6 +1,7 @@
 // src/screens/BotGameScreen.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler } from 'react-native';
+import { getLevelColor } from '../utils/levelSystem';
 import { useFocusEffect } from '@react-navigation/native';
 import { ref, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
