@@ -195,8 +195,6 @@ const PlayerProfileScreen = ({ route, navigation }) => {
 
   // Автоматический переход в игру, если появилась активная игра для текущего пользователя
   useEffect(() => {
-    if (playerId !== userId) return;  // ← Только для своего профиля
-    
     const gamesRef = ref(db, 'games_checkers');
     const unsubscribe = onValue(gamesRef, (snapshot) => {
       const games = snapshot.val();
@@ -206,6 +204,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
           if (navigation.isFocused() && !gameCreatedRef.current) {
             gameCreatedRef.current = true;
             const myRole = game.players[userId];
+            console.log('🎮 Переход в игру:', gid, 'роль:', myRole);
             navigation.replace('OnlineGame', { gameId: gid, playerKey: userId, myRole });
             break;
           }
@@ -213,7 +212,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       }
     });
     return () => off(gamesRef);
-  }, [userId, navigation, playerId]);
+  }, [userId, navigation]);
 
   // ... остальные функции без изменений ...
   const checkSentInvite = async () => {

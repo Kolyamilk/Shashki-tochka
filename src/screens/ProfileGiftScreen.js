@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,89 +7,116 @@ import {
   FlatList,
   SafeAreaView,
   StatusBar,
+  Modal,
+  Alert,
 } from 'react-native';
+import { ref, get, update } from 'firebase/database';
+import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
-
-// Статичные данные подарков (позже заменятся на данные из БД)
-const giftsData = [
-  {
-    id: '1',
-    name: 'Розовый мишка',
-    emoji: '🧸',
-    from: 'Анна',
-    date: '2 марта 2025',
-  },
-  {
-    id: '2',
-    name: 'Торт с сюрпризом',
-    emoji: '🎂',
-    from: 'Дмитрий',
-    date: '14 фев 2025',
-  },
-  {
-    id: '3',
-    name: 'Букет лаванды',
-    emoji: '💐',
-    from: 'Елена',
-    date: '8 мар 2025',
-  },
-  {
-    id: '4',
-    name: 'Коробка конфет',
-    emoji: '🍫',
-    from: 'Максим',
-    date: '23 фев 2025',
-  },
-  {
-    id: '5',
-    name: 'Воздушный шар',
-    emoji: '🎈',
-    from: 'Ольга',
-    date: '1 мар 2025',
-  },
-  {
-    id: '6',
-    name: 'Игровой набор',
-    emoji: '🎮',
-    from: 'Сергей',
-    date: '10 мар 2025',
-  },
-  {
-    id: '7',
-    name: 'Книга-квест',
-    emoji: '📚',
-    from: 'Наталья',
-    date: '5 мар 2025',
-  },
-  {
-    id: '8',
-    name: 'Плед с рукавами',
-    emoji: '🧣',
-    from: 'Ирина',
-    date: '12 мар 2025',
-  },
-  {
-    id: '9',
-    name: 'Фоторамка',
-    emoji: '🖼️',
-    from: 'Алексей',
-    date: '18 мар 2025',
-  },
-];
+import { useAuth } from '../context/AuthContext';
+import { getAvailableGifts, RARITY_COLORS, RARITY_NAMES } from '../utils/giftSystem';
+import { getLevelFromExp } from '../utils/levelSystem';
 
 const ProfileGiftScreen = ({ navigation }) => {
+  const { userId } = useAuth();
+  const [gifts, setGifts] = useState([]);
+  const [userGifts, setUserGifts] = useState([]);
+  const [selectedGift, setSelectedGift] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  useEffect(() => {
+    loadUserGifts();
+  }, [userId]);
+
+  const loadUserGifts = async () => {
+    if (!userId) return;
+
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+
+      if (snapshot.exists()) {
+        const userData = snapshot.val();
+        const currentLevel = getLevelFromExp(userData.stats?.exp || 0).level;
+
+        // Получаем все доступные подарки до текущего уровня
+        const availableGifts = getAvailableGifts(currentLevel);
+
+        // Получаем подарки пользователя из БД (проданные подарки)
+        const soldGifts = userData.soldGifts || [];
+
+        // Фильтруем подарки - показываем только те, что не проданы
+        const userGiftsList = availableGifts.filter(
+          gift => !soldGifts.includes(gift.id)
+        );
+
+        setGifts(userGiftsList);
+        setUserGifts(userGiftsList);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки подарков:', error);
+    }
+  };
+
+  const handleGiftPress = (gift) => {
+    setSelectedGift(gift);
+    setModalVisible(true);
+  };
+
+  const handleSellGift = async () => {
+    if (!selectedGift || !userId) return;
+
+    Alert.alert(
+      'Продать подарок?',
+      `Вы получите ${selectedGift.sellValue} опыта за "${selectedGift.name}". Это действие нельзя отменить.`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Продать',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const userRef = ref(db, `users/${userId}`);
+              const snapshot = await get(userRef);
+
+              if (snapshot.exists()) {
+                const userData = snapshot.val();
+                const currentExp = userData.stats?.exp || 0;
+                const soldGifts = userData.soldGifts || [];
+
+                // Добавляем опыт и отмечаем подарок как проданный
+                await update(userRef, {
+                  'stats/exp': currentExp + selectedGift.sellValue,
+                  soldGifts: [...soldGifts, selectedGift.id],
+                });
+
+                Alert.alert('Успешно!', `Вы получили ${selectedGift.sellValue} опыта!`);
+                setModalVisible(false);
+                loadUserGifts(); // Перезагружаем список
+              }
+            } catch (error) {
+              console.error('Ошибка продажи подарка:', error);
+              Alert.alert('Ошибка', 'Не удалось продать подарок');
+            }
+          },
+        },
+      ]
+    );
+  };
   const renderGiftItem = ({ item }) => (
     <TouchableOpacity
-      style={styles.giftCard}
+      style={[styles.giftCard, { borderColor: RARITY_COLORS[item.rarity] }]}
       activeOpacity={0.8}
-      onPress={() => alert(`${item.emoji} ${item.name}\n\nОт: ${item.from}\nДата: ${item.date}`)}
+      onPress={() => handleGiftPress(item)}
     >
-      <View style={styles.giftEmojiContainer}>
+      <View style={[styles.giftEmojiContainer, { backgroundColor: `${RARITY_COLORS[item.rarity]}20` }]}>
         <Text style={styles.giftEmoji}>{item.emoji}</Text>
       </View>
       <Text style={styles.giftName} numberOfLines={2}>{item.name}</Text>
-      <Text style={styles.giftFrom} numberOfLines={1}>от {item.from}</Text>
-      <Text style={styles.giftDate}>{item.date}</Text>
+      <Text style={[styles.giftRarity, { color: RARITY_COLORS[item.rarity] }]}>
+        {RARITY_NAMES[item.rarity]}
+      </Text>
+      <Text style={styles.giftLevel}>Уровень {item.level}</Text>
     </TouchableOpacity>
   );
 
@@ -108,7 +135,7 @@ const ProfileGiftScreen = ({ navigation }) => {
           <View style={styles.titleContainer}>
             <Text style={styles.title}>Мои подарки</Text>
             <View style={styles.countBadge}>
-              <Text style={styles.countText}>{giftsData.length}</Text>
+              <Text style={styles.countText}>{gifts.length}</Text>
             </View>
           </View>
           <View style={styles.placeholderRight} />
@@ -116,7 +143,7 @@ const ProfileGiftScreen = ({ navigation }) => {
 
         {/* Сетка подарков */}
         <FlatList
-          data={giftsData}
+          data={gifts}
           keyExtractor={(item, index) => `${item.id}-${index}`}
           numColumns={3}
           showsVerticalScrollIndicator={false}
@@ -126,10 +153,59 @@ const ProfileGiftScreen = ({ navigation }) => {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyEmoji}>🎁</Text>
               <Text style={styles.emptyText}>Пока нет подарков</Text>
-              <Text style={styles.emptySubtext}>Подарки от других игроков появятся здесь</Text>
+              <Text style={styles.emptySubtext}>Получайте уникальные подарки каждые 5 уровней!</Text>
             </View>
           }
         />
+
+        {/* Модальное окно с деталями подарка */}
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              {selectedGift && (
+                <>
+                  <Text style={styles.modalEmoji}>{selectedGift.emoji}</Text>
+                  <Text style={styles.modalTitle}>{selectedGift.name}</Text>
+                  <Text style={[styles.modalRarity, { color: RARITY_COLORS[selectedGift.rarity] }]}>
+                    {RARITY_NAMES[selectedGift.rarity]}
+                  </Text>
+                  <Text style={styles.modalDescription}>{selectedGift.description}</Text>
+
+                  <View style={styles.modalStats}>
+                    <View style={styles.modalStatItem}>
+                      <Text style={styles.modalStatLabel}>Уровень</Text>
+                      <Text style={styles.modalStatValue}>{selectedGift.level}</Text>
+                    </View>
+                    <View style={styles.modalStatItem}>
+                      <Text style={styles.modalStatLabel}>Цена продажи</Text>
+                      <Text style={styles.modalStatValue}>{selectedGift.sellValue} опыта</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.sellButton]}
+                      onPress={handleSellGift}
+                    >
+                      <Text style={styles.modalButtonText}>💰 Продать</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.closeButton]}
+                      onPress={() => setModalVisible(false)}
+                    >
+                      <Text style={styles.modalButtonText}>Закрыть</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -206,12 +282,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
     minHeight: 140,
+    borderWidth: 2,
   },
   giftEmojiContainer: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(78, 205, 196, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -227,17 +303,98 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingHorizontal: 4,
   },
-  giftFrom: {
+  giftRarity: {
     fontSize: 11,
-    color: '#4ECDC4',
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: 2,
-    fontWeight: '500',
   },
-  giftDate: {
+  giftLevel: {
     fontSize: 10,
     color: '#8e8e93',
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#2c3e50',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
+  modalEmoji: {
+    fontSize: 80,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textLight,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalRarity: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  modalDescription: {
+    fontSize: 15,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 24,
+  },
+  modalStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalStatLabel: {
+    fontSize: 12,
+    color: '#8e8e93',
+    marginBottom: 4,
+  },
+  modalStatValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#4ECDC4',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  sellButton: {
+    backgroundColor: '#f39c12',
+  },
+  closeButton: {
+    backgroundColor: '#555',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
   emptyContainer: {
     flex: 1,

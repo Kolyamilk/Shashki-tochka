@@ -7,6 +7,7 @@ import { ref, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
+import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 
 const MenuScreen = ({ navigation }) => {
   const { userId } = useAuth();
@@ -24,6 +25,18 @@ const MenuScreen = ({ navigation }) => {
     if (snapshot.exists()) {
       setUserData(snapshot.val());
     }
+  }, [userId]);
+
+  // Подписка на изменения данных пользователя (для обновления имени)
+  useEffect(() => {
+    if (!userId) return;
+    const userRef = ref(db, `users/${userId}`);
+    const unsubscribe = onValue(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setUserData(snapshot.val());
+      }
+    });
+    return () => off(userRef);
   }, [userId]);
 
   // Загружаем топ-3 игроков
@@ -189,7 +202,14 @@ const MenuScreen = ({ navigation }) => {
             {userData ? (
               <View style={styles.profileInfo}>
                 <Text style={styles.avatar}>{userData.avatar}</Text>
-                <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
+                  <View style={styles.levelContainer}>
+                    <Text style={[styles.levelText, { color: getLevelColor(getLevelFromExp(userData.stats?.exp || 0).level) }]}>
+                      ⭐ Ур. {getLevelFromExp(userData.stats?.exp || 0).level}
+                    </Text>
+                  </View>
+                </View>
               </View>
             ) : (
               <ActivityIndicator size="small" color={colors.textLight} />
@@ -381,7 +401,7 @@ const styles = StyleSheet.create({
   profileButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4ECDC4',
+    backgroundColor: '#2c3e50',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 30,
@@ -390,20 +410,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
   },
   profileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    fontSize: 22,
-    marginRight: 8,
+    fontSize: 28,
+    marginRight: 10,
+  },
+  userInfo: {
+    flexDirection: 'column',
   },
   userName: {
     fontSize: 15,
     fontWeight: '600',
     color: '#fff',
     maxWidth: 120,
+  },
+  levelContainer: {
+    marginTop: 2,
+  },
+  levelText: {
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   settingsButton: {
     backgroundColor: colors.secondary,

@@ -3,13 +3,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity } from 'react-native';
 import { colors } from '../styles/globalStyles';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
+import { shouldReceiveGift, getGiftForLevel } from '../utils/giftSystem';
 
 const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
+  const [showGiftNotification, setShowGiftNotification] = useState(false);
+  const [receivedGift, setReceivedGift] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const levelUpAnim = useRef(new Animated.Value(0)).current;
+  const giftAnim = useRef(new Animated.Value(0)).current;
 
   const oldLevelInfo = getLevelFromExp(oldExp);
   const newLevelInfo = getLevelFromExp(oldExp + expGained);
@@ -23,6 +27,12 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
 
   useEffect(() => {
     if (visible) {
+      // Проверяем, получил ли игрок подарок
+      if (leveledUp && shouldReceiveGift(newLevelInfo.level)) {
+        const gift = getGiftForLevel(newLevelInfo.level);
+        setReceivedGift(gift);
+      }
+
       // Появление модального окна
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -61,7 +71,20 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
                   duration: 1000,
                   useNativeDriver: true,
                 }),
-              ]).start();
+              ]).start(() => {
+                // Показываем уведомление о подарке после анимации уровня
+                if (receivedGift) {
+                  setTimeout(() => {
+                    setShowGiftNotification(true);
+                    Animated.spring(giftAnim, {
+                      toValue: 1,
+                      friction: 6,
+                      tension: 40,
+                      useNativeDriver: true,
+                    }).start();
+                  }, 500);
+                }
+              });
             }, 300);
           }
         });
@@ -72,7 +95,10 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
       scaleAnim.setValue(0.5);
       progressAnim.setValue(0);
       levelUpAnim.setValue(0);
+      giftAnim.setValue(0);
       setShowLevelUp(false);
+      setShowGiftNotification(false);
+      setReceivedGift(null);
     }
   }, [visible, leveledUp]);
 
@@ -152,6 +178,31 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
               <Text style={styles.levelUpTitle}>⭐ НОВЫЙ УРОВЕНЬ! ⭐</Text>
               <Text style={styles.levelUpNumber}>{newLevelInfo.level}</Text>
               <Text style={styles.levelUpRank}>{rankName}</Text>
+            </Animated.View>
+          )}
+
+          {/* Уведомление о подарке */}
+          {showGiftNotification && receivedGift && (
+            <Animated.View
+              style={[
+                styles.giftNotification,
+                {
+                  opacity: giftAnim,
+                  transform: [
+                    {
+                      scale: giftAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.5, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.giftEmoji}>{receivedGift.emoji}</Text>
+              <Text style={styles.giftTitle}>🎁 Новый подарок!</Text>
+              <Text style={styles.giftName}>{receivedGift.name}</Text>
+              <Text style={styles.giftDescription}>Проверьте раздел "Мои подарки"</Text>
             </Animated.View>
           )}
 
@@ -274,6 +325,38 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: colors.textLight,
+  },
+  giftNotification: {
+    backgroundColor: 'rgba(243, 156, 18, 0.2)',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#f39c12',
+  },
+  giftEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  giftTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#f39c12',
+    marginBottom: 8,
+  },
+  giftName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textLight,
+    marginBottom: 4,
+  },
+  giftDescription: {
+    fontSize: 13,
+    color: '#aaa',
+    textAlign: 'center',
   },
   closeButton: {
     backgroundColor: '#4ECDC4',

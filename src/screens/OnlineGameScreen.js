@@ -15,7 +15,7 @@ import {
   hasMoves,
   BOARD_SIZE
 } from '../utils/checkersLogic';
-import { EXP_REWARDS } from '../utils/levelSystem';
+import { EXP_REWARDS, getLevelFromExp, getLevelColor } from '../utils/levelSystem';
 import { colors } from '../styles/globalStyles';
 import { useSettings } from '../context/SettingsContext';
 
@@ -55,25 +55,28 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   const winnerOldExp = winnerStats.exp || 0;
   const loserOldExp = loserStats.exp || 0;
 
-  // Победитель всегда получает опыт
+  // Если противник сдался/вышел - победитель получает половину опыта (150 вместо 300)
+  const winnerExpGain = isSurrender ? 150 : EXP_REWARDS.WIN_ONLINE;
+
   await update(winnerRef, {
     totalGames: winnerStats.totalGames + 1,
     wins: winnerStats.wins + 1,
-    exp: winnerOldExp + EXP_REWARDS.WIN_ONLINE,
+    exp: winnerOldExp + winnerExpGain,
   });
 
-  // Проигравший получает опыт только если не сдался
+  // Проигравший не получает опыт если сдался/вышел
   await update(loserRef, {
     totalGames: loserStats.totalGames + 1,
     wins: loserStats.wins,
     exp: loserOldExp + (isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE),
   });
 
-  return { winnerOldExp, loserOldExp };
+  return { winnerOldExp, loserOldExp, winnerExpGain };
 };
 
 const OnlineGameScreen = ({ route, navigation }) => {
   const { gameId, playerKey, myRole } = route.params;
+  const { myPieceColor, opponentPieceColor } = useSettings();
   const [board, setBoard] = useState(initialBoard());
     const { resetInviteFlags } = useInvite();
   const [gameData, setGameData] = useState(null);
@@ -83,8 +86,10 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [captured, setCaptured] = useState({ white: 0, black: 0 });
   const [opponentName, setOpponentName] = useState('');
   const [opponentAvatar, setOpponentAvatar] = useState('');
+  const [opponentLevel, setOpponentLevel] = useState(1);
   const [myName, setMyName] = useState('');
   const [myAvatar, setMyAvatar] = useState('');
+  const [myLevel, setMyLevel] = useState(1);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
   const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0 });
 
@@ -111,13 +116,13 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
     if (winnerId && loserId) {
       try {
-        const { winnerOldExp, loserOldExp } = await updateStats(winnerId, loserId, isSurrender);
+        const { winnerOldExp, loserOldExp, winnerExpGain } = await updateStats(winnerId, loserId, isSurrender);
         if (isWin) {
-          expGained = EXP_REWARDS.WIN_ONLINE;
+          expGained = winnerExpGain; // 150 если противник сдался, 300 если обычная победа
           oldExp = winnerOldExp;
         } else {
-          // Если игрок сдался, опыт не начисляется
-          expGained = isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE;
+          // Если игрок сдался/вышел, опыт не начисляется
+          expGained = 0;
           oldExp = loserOldExp;
         }
       } catch (err) {
@@ -270,6 +275,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         const data = snapshot.val();
         setMyName(data.name || 'Игрок');
         setMyAvatar(data.avatar || '😀');
+        setMyLevel(getLevelFromExp(data.stats?.exp || 0).level);
       }
     };
     loadMyData();
@@ -287,6 +293,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
             const oppData = snapshot.val();
             setOpponentName(oppData.name || 'Соперник');
             setOpponentAvatar(oppData.avatar || '😎');
+            setOpponentLevel(getLevelFromExp(oppData.stats?.exp || 0).level);
           }
         };
         loadOpponentData();
@@ -577,10 +584,25 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
       <View style={styles.opponentInfo}>
         <Text style={styles.opponentAvatar}>{opponentAvatar}</Text>
-        <Text style={styles.opponentName}>{opponentName || 'Соперник'}</Text>
-        <View style={styles.capturedBadgeSmall}>
-          <Text style={styles.capturedTextSmall}>🍽️ {opponentCaptured}</Text>
+        <View style={styles.playerDetails}>
+          <Text style={styles.opponentName}>{opponentName || 'Соперник'}</Text>
+          <Text style={[styles.levelBadge, { color: getLevelColor(opponentLevel) }]}>
+            ⭐ Ур. {opponentLevel}
+          </Text>
         </View>
+      </View>
+
+      {/* Съеденные шашки противника (сверху) - противник съел мои шашки */}
+      <View style={styles.capturedRow}>
+        {Array.from({ length: opponentCaptured }).map((_, index) => (
+          <View
+            key={`opponent-${index}`}
+            style={[
+              styles.capturedPiece,
+              { backgroundColor: myPieceColor, borderColor: myPieceColor }
+            ]}
+          />
+        ))}
       </View>
 
       <Board
@@ -594,11 +616,26 @@ const OnlineGameScreen = ({ route, navigation }) => {
         onAnimationFinish={onAnimationFinish}
       />
 
+      {/* Съеденные шашки игрока (снизу) - я съел шашки противника */}
+      <View style={styles.capturedRow}>
+        {Array.from({ length: myCaptured }).map((_, index) => (
+          <View
+            key={`player-${index}`}
+            style={[
+              styles.capturedPiece,
+              { backgroundColor: opponentPieceColor, borderColor: opponentPieceColor }
+            ]}
+          />
+        ))}
+      </View>
+
       <View style={styles.playerInfo}>
         <Text style={styles.playerAvatar}>{myAvatar}</Text>
-        <Text style={styles.playerName}>{myName || 'Вы'}</Text>
-        <View style={styles.capturedBadgeSmall}>
-          <Text style={styles.capturedTextSmall}>🍽️ {myCaptured}</Text>
+        <View style={styles.playerDetails}>
+          <Text style={styles.playerName}>{myName || 'Вы'}</Text>
+          <Text style={[styles.levelBadge, { color: getLevelColor(myLevel) }]}>
+            ⭐ Ур. {myLevel}
+          </Text>
         </View>
       </View>
 
@@ -622,12 +659,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a2a3a',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 110,
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  capturedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    maxWidth: 380,
+    height: 80,
+  },
+  capturedPiece: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 3,
+    marginVertical: 3,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
   },
   turnIndicator: {
-    marginTop: 30,
-    marginBottom: 20,
+    marginBottom: 10,
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 40,
@@ -654,10 +713,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 40,
     marginLeft: 20,
-    marginBottom: 0,
+    marginBottom: 10,
   },
   opponentAvatar: { fontSize: 28, marginRight: 8 },
-  opponentName: { fontSize: 18, color: colors.textLight, fontWeight: '600', marginRight: 12 },
+  opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600' },
+  playerDetails: {
+    flexDirection: 'column',
+    marginRight: 12,
+  },
+  levelBadge: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
   playerInfo: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -667,17 +735,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 40,
     marginLeft: 20,
-    marginTop: 0,
+    marginTop: 10,
   },
   playerAvatar: { fontSize: 28, marginRight: 8 },
-  playerName: { fontSize: 18, color: colors.textLight, fontWeight: '600', marginRight: 12 },
-  capturedBadgeSmall: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  capturedTextSmall: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
+  playerName: { fontSize: 16, color: colors.textLight, fontWeight: '600' },
   giveUpButton: {
     position: 'absolute',
     bottom: 30,

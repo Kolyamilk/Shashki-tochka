@@ -1,6 +1,7 @@
 // src/screens/BotGameScreen.js
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { ref, set, remove, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
@@ -19,7 +20,7 @@ import {
 import { getBestMove } from '../utils/botLogic';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
-import { EXP_REWARDS } from '../utils/levelSystem';
+import { EXP_REWARDS, getLevelFromExp, getLevelColor } from '../utils/levelSystem';
 import { get } from 'firebase/database';
 
 const BotGameScreen = ({ route, navigation }) => {
@@ -40,6 +41,9 @@ const BotGameScreen = ({ route, navigation }) => {
   const [pendingMove, setPendingMove] = useState(null);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
   const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0 });
+  const [myLevel, setMyLevel] = useState(1);
+  const [myName, setMyName] = useState('Вы');
+  const [myAvatar, setMyAvatar] = useState('😀');
 
   const isAnimatingRef = useRef(false);
   const isBotThinkingRef = useRef(false);
@@ -56,6 +60,20 @@ const BotGameScreen = ({ route, navigation }) => {
   // ← При монтировании создаём запись в bot_games
   useEffect(() => {
     if (!userId) return;
+
+    // Загружаем данные игрока
+    const loadPlayerData = async () => {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setMyName(data.name || 'Вы');
+        setMyAvatar(data.avatar || '😀');
+        setMyLevel(getLevelFromExp(data.stats?.exp || 0).level);
+      }
+    };
+    loadPlayerData();
+
     const gameId = `bot_${userId}_${Date.now()}`;
     gameIdRef.current = gameId;
     const botGameRef = ref(db, `bot_games/${gameId}`);
@@ -443,14 +461,24 @@ const BotGameScreen = ({ route, navigation }) => {
       <View style={styles.opponentInfo}>
         <Text style={styles.opponentAvatar}>🤖</Text>
         <Text style={styles.opponentName}>Бот</Text>
-        <View style={styles.capturedBadge}>
-          <Text style={styles.capturedText}>🍽️ {player2Captured}</Text>
-        </View>
         {!isMyTurn && (
           <View style={styles.turnBadge}>
             <Text style={styles.turnBadgeText}>🤖 Думает...</Text>
           </View>
         )}
+      </View>
+
+      {/* Съеденные шашки бота (сверху) - бот съел мои шашки */}
+      <View style={styles.capturedRow}>
+        {Array.from({ length: player2Captured }).map((_, index) => (
+          <View
+            key={`bot-${index}`}
+            style={[
+              styles.capturedPiece,
+              { backgroundColor: myPieceColor, borderColor: myPieceColor }
+            ]}
+          />
+        ))}
       </View>
 
       <Board
@@ -464,11 +492,26 @@ const BotGameScreen = ({ route, navigation }) => {
         onAnimationFinish={onAnimationFinish}
       />
 
+      {/* Съеденные шашки игрока (снизу) - я съел шашки бота */}
+      <View style={styles.capturedRow}>
+        {Array.from({ length: player1Captured }).map((_, index) => (
+          <View
+            key={`player-${index}`}
+            style={[
+              styles.capturedPiece,
+              { backgroundColor: opponentPieceColor, borderColor: opponentPieceColor }
+            ]}
+          />
+        ))}
+      </View>
+
       <View style={styles.playerInfo}>
-        <Text style={styles.playerAvatar}>😀</Text>
-        <Text style={styles.playerName}>Вы</Text>
-        <View style={styles.capturedBadge}>
-          <Text style={styles.capturedText}>🍽️ {player1Captured}</Text>
+        <Text style={styles.playerAvatar}>{myAvatar}</Text>
+        <View style={styles.playerDetails}>
+          <Text style={styles.playerName}>{myName}</Text>
+          <Text style={[styles.levelBadge, { color: getLevelColor(myLevel) }]}>
+            ⭐ Ур. {myLevel}
+          </Text>
         </View>
         {isMyTurn && (
           <View style={styles.turnBadge}>
@@ -492,14 +535,26 @@ const BotGameScreen = ({ route, navigation }) => {
     </View>
   );
 
+  // Обработка кнопки "Назад"
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        handleGiveUp();
+        return true;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
+
   function handleGiveUp() {
     Alert.alert(
-      'Сдаться',
-      'Вы уверены?',
+      'Выйти из игры',
+      'Вы уверены, что хотите выйти из игры?',
       [
         { text: 'Отмена', style: 'cancel' },
         {
-          text: 'Да',
+          text: 'Выйти',
           style: 'destructive',
           onPress: async () => {
             if (gameIdRef.current) {
@@ -525,6 +580,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a2a3a',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  capturedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    maxWidth: 380,
+    height: 80,
+  },
+  capturedPiece: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 3,
+    marginVertical: 3,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
   },
   header: {
     position: 'absolute',
@@ -568,15 +646,16 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   playerAvatar: { fontSize: 24, marginRight: 8 },
-  playerName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
-  capturedBadge: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 15,
+  playerName: { fontSize: 14, color: colors.textLight, fontWeight: '600' },
+  playerDetails: {
+    flexDirection: 'column',
     marginRight: 10,
   },
-  capturedText: { fontSize: 13, fontWeight: 'bold', color: '#fff' },
+  levelBadge: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
   turnBadge: {
     backgroundColor: '#4ECDC4',
     paddingHorizontal: 12,
