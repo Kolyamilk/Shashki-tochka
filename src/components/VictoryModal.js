@@ -6,7 +6,7 @@ import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSyste
 import { shouldReceiveGift, getGiftForLevel } from '../utils/giftSystem';
 import GiftReceivedModal from './GiftReceivedModal';
 
-const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false }) => {
+const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -175,13 +175,33 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
               <Text style={styles.levelUpTitle}>⭐ НОВЫЙ УРОВЕНЬ! ⭐</Text>
               <Text style={styles.levelUpNumber}>{newLevelInfo.level}</Text>
               <Text style={styles.levelUpRank}>{rankName}</Text>
+              {receivedGift && (
+                <View style={styles.giftNotification}>
+                  <Text style={styles.giftEmoji}>{receivedGift.emoji}</Text>
+                  <Text style={styles.giftText}>Вам подарок!</Text>
+                </View>
+              )}
             </Animated.View>
           )}
 
           {/* Кнопка закрытия */}
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Продолжить</Text>
-          </TouchableOpacity>
+          {receivedGift ? (
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                onClose();
+                if (navigation) {
+                  navigation.navigate('GiftScreen');
+                }
+              }}
+            >
+              <Text style={styles.closeButtonText}>🎁 Посмотреть подарок</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Text style={styles.closeButtonText}>Продолжить</Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
       </Animated.View>
 
@@ -307,6 +327,19 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: colors.textLight,
+  },
+  giftNotification: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  giftEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  giftText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFD700',
   },
   closeButton: {
     backgroundColor: '#4ECDC4',

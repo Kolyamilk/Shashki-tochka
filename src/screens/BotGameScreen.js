@@ -594,6 +594,7 @@ const BotGameScreen = ({ route, navigation }) => {
         expGained={victoryData.expGained}
         oldExp={victoryData.oldExp}
         onClose={handleVictoryClose}
+        navigation={navigation}
       />
     </View>
   );

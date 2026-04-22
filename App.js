@@ -74,15 +74,12 @@ function AppNavigator() {
 
   const createInvitationsSubscription = useCallback(() => {
     if (!userId || !isNavigationReady) {
-      console.log('⏳ Невозможно создать подписку: userId или навигация не готовы');
       return;
     }
     if (unsubscribeInvitations.current) {
-      console.log('⚠️ Подписка уже существует, пропускаем');
       return;
     }
 
-    console.log(`📡 Создаём подписку на приглашения для userId: ${userId}`);
     hasShownAlertFor.current.clear();
     processedAccepted.current.clear();
     wasAcceptedRef.current = false;
@@ -91,10 +88,8 @@ function AppNavigator() {
 
     const invitationsRef = ref(db, 'invitations');
     const handler = async (snapshot) => {
-      console.log('🔥 Обработчик приглашений сработал!');
       const data = snapshot.val();
       if (!data) {
-        console.log('📭 invitations пуст');
         if (currentAlertVisible.current && currentAlertInvId.current && !wasAcceptedRef.current) {
           Alert.alert('Приглашение отменено', 'Игрок отменил приглашение.', [{ text: 'OK' }]);
         }
@@ -104,14 +99,10 @@ function AppNavigator() {
         return;
       }
 
-      console.log('📨 Всего приглашений:', Object.keys(data).length);
-      console.log('📨 Мой userId:', userId);
       for (const [invId, invData] of Object.entries(data)) {
-        console.log(`📋 Проверка приглашения ${invId}: from=${invData.from}, to=${invData.to}, status=${invData.status}, gameType=${invData.gameType}, myUserId=${userId}`);
 
         // 1. Входящее приглашение (получатель)
         if (invData.to === userId && invData.status === 'pending') {
-          console.log('✅ Найдено входящее приглашение!');
           if (!currentAlertVisible.current && !hasShownAlertFor.current.has(invId)) {
             hasShownAlertFor.current.add(invId);
             currentAlertVisible.current = true;
@@ -120,7 +111,6 @@ function AppNavigator() {
             const gameTypeName = invData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки';
             const gameTypeEmoji = invData.gameType === 'giveaway' ? '🎯' : '♟️';
 
-            console.log('🔔 Показываем Alert пользователю...');
             Alert.alert(
               'Приглашение в игру',
               `${invData.fromName || 'Игрок'} приглашает вас сыграть!\n\n${gameTypeEmoji} Режим: ${gameTypeName}`,
@@ -129,7 +119,6 @@ function AppNavigator() {
                   text: 'Отказаться',
                   style: 'cancel',
                   onPress: async () => {
-                    console.log(`❌ Отказ от приглашения ${invId}`);
                     await remove(ref(db, `invitations/${invId}`));
                     currentAlertVisible.current = false;
                     currentAlertInvId.current = null;
@@ -139,12 +128,10 @@ function AppNavigator() {
                 {
                   text: 'Принять',
                   onPress: async () => {
-                    console.log(`✅ Принятие приглашения ${invId}`);
                     wasAcceptedRef.current = true;
                     const checkRef = ref(db, `invitations/${invId}`);
                     const checkSnap = await get(checkRef);
                     if (!checkSnap.exists() || checkSnap.val().status !== 'pending') {
-                      console.log('❌ Приглашение больше не активно!');
                       Alert.alert('Ошибка', 'Приглашение было отменено.', [{ text: 'OK' }]);
                       currentAlertVisible.current = false;
                       currentAlertInvId.current = null;
@@ -162,11 +149,8 @@ function AppNavigator() {
                       gameType: invData.gameType || 'russian',
                       createdAt: Date.now(),
                     });
-                    console.log('🎮 Игра создана:', gameId);
                     await update(ref(db, `invitations/${invId}`), { status: 'accepted', gameId });
-                    console.log('📝 Статус обновлён на accepted');
                     await remove(ref(db, `invitations/${invId}`));
-                    console.log('🗑️ Приглашение удалено');
                     currentAlertVisible.current = false;
                     currentAlertInvId.current = null;
                     hasShownAlertFor.current.delete(invId);
@@ -175,29 +159,23 @@ function AppNavigator() {
                 }
               ],
               { cancelable: false, onDismiss: () => {
-                console.log('⚠️ Alert закрыт без нажатия кнопки');
                 currentAlertVisible.current = false;
                 currentAlertInvId.current = null;
                 hasShownAlertFor.current.delete(invId);
               }}
             );
-          } else {
-            console.log('⚠️ Alert уже показан или обработан');
           }
         }
 
         // 2. Моё приглашение принято (отправитель)
         if (invData.from === userId && invData.status === 'accepted' && invData.gameId) {
           if (processedAccepted.current.has(invId)) {
-            console.log('⚠️ Это accepted уже обработано');
             continue;
           }
           processedAccepted.current.add(invId);
-          console.log('✅ МОЁ ПРИГЛАШЕНИЕ ПРИНЯТО!');
           const gameCheckRef = ref(db, `games_checkers/${invData.gameId}`);
           const gameCheckSnap = await get(gameCheckRef);
           if (!gameCheckSnap.exists()) {
-            console.log('❌ Игра не найдена, создаём заново...');
             const gameRef = ref(db, `games_checkers/${invData.gameId}`);
             await set(gameRef, {
               players: { [userId]: 1, [invData.to]: 2 },
@@ -223,22 +201,19 @@ function AppNavigator() {
   }, [userId, isNavigationReady, navigateToGame]);
 
   const resetInviteFlags = useCallback(() => {
-    console.log('🧹 Сброс флагов приглашений и пересоздание подписки');
-    console.log('📊 Текущее состояние:', {
-      hasShownAlertFor: Array.from(hasShownAlertFor.current),
-      processedAccepted: Array.from(processedAccepted.current),
-      currentAlertVisible: currentAlertVisible.current,
-      currentAlertInvId: currentAlertInvId.current
-    });
+    // Очищаем все флаги
+    hasShownAlertFor.current.clear();
+    processedAccepted.current.clear();
+    currentAlertVisible.current = false;
+    currentAlertInvId.current = null;
+    wasAcceptedRef.current = false;
 
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     if (unsubscribeInvitations.current) {
-      console.log('📡 Удаляем старую подписку');
       unsubscribeInvitations.current();
       unsubscribeInvitations.current = null;
     }
     resetTimerRef.current = setTimeout(() => {
-      console.log('🔄 Пересоздаём подписку на приглашения');
       createInvitationsSubscription();
       resetTimerRef.current = null;
     }, 1000);
@@ -303,7 +278,6 @@ function AppNavigator() {
     if (!userId || !isNavigationReady) return;
     const handleAppStateChange = async (nextAppState) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('📱 Приложение вернулось из фона!');
         resetInviteFlags();
         await new Promise(resolve => setTimeout(resolve, 1000));
         if (pendingGameId.current) {
@@ -335,7 +309,6 @@ function AppNavigator() {
             }
           }
         }
-        console.log('❌ Активных игр не найдено');
       }
       appState.current = nextAppState;
     };
@@ -347,7 +320,6 @@ function AppNavigator() {
   useEffect(() => {
     if (!userId || !isNavigationReady) return;
     const cleanupOldGames = async () => {
-      console.log('🧹 Запуск очистки старых игр...');
       const gamesRef = ref(db, 'games_checkers');
       const snapshot = await get(gamesRef);
       if (!snapshot.exists()) return;
@@ -359,10 +331,8 @@ function AppNavigator() {
         if (isFinished || isOld) {
           await remove(ref(db, `games_checkers/${gameId}`));
           deletedCount++;
-          console.log(`🗑️ Удалена игра ${gameId}`);
         }
       }
-      console.log(`✅ Удалено ${deletedCount} старых игр`);
     };
     cleanupOldGames();
     const cleanupInterval = setInterval(cleanupOldGames, 300000);
@@ -378,7 +348,6 @@ function AppNavigator() {
         ref={navigationRef}
         onReady={() => {
           setIsNavigationReady(true);
-          console.log('🚀 Navigation is ready');
           if (pendingGameId.current) {
             setTimeout(() => {
               const { gameId, playerKey, myRole } = pendingGameId.current;

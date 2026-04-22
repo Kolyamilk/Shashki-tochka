@@ -33,13 +33,12 @@ const PlayersScreen = ({ navigation }) => {
         if (snapshot.exists()) {
           const data = snapshot.val();
           const userList = Object.keys(data)
-            .filter(key => key !== userId)  // ← ← ← ИСКЛЮЧАЕМ текущего пользователя!
+            .filter(key => key !== userId)
             .map(key => ({
               id: key,
               ...data[key],
             }));
           setPlayers(userList);
-          console.log(`✅ Загружено ${userList.length} игроков (без текущего)`);
         }
       } catch (error) {
         console.error('❌ Ошибка загрузки пользователей:', error);
@@ -48,14 +47,13 @@ const PlayersScreen = ({ navigation }) => {
       }
     };
     fetchUsers();
-  }, [userId]);  // ← ← ← Добавили userId в зависимости
+  }, [userId]);
 
   // ← Подписываемся на онлайн-статусы
   useEffect(() => {
     const statusRef = ref(db, 'status');
     const unsubscribe = onValue(statusRef, (snapshot) => {
       const data = snapshot.val();
-      console.log('📡 Status update:', data ? Object.keys(data).length : 'empty');
       if (data) {
         setStatuses(data);
       } else {
@@ -70,41 +68,31 @@ const PlayersScreen = ({ navigation }) => {
 
   // ← Подписываемся на игры PvP (с проверкой status === 'active' И время создания)
   useEffect(() => {
-    console.log('📡 Подписка на games_checkers');
     const gamesRef = ref(db, 'games_checkers');
-    
+
     const handleGamesUpdate = (snapshot) => {
       const data = snapshot.val();
-      console.log('🔄 games_checkers update:', data ? Object.keys(data).length : 'empty');
-      
+
       if (data) {
         const activeGames = {};
         const now = Date.now();
-        
+
         for (const [gameId, game] of Object.entries(data)) {
-          // ← ← ← КРИТИЧНО: проверяем status === 'active' И игра недавняя (< 10 минут)
           const isRecent = game.createdAt && (now - game.createdAt < 600000);
-          
+
           if (game && game.status === 'active' && game.players && isRecent) {
             activeGames[gameId] = game;
-            console.log(`✅ Активная PvP игра: ${gameId}`, { 
-              players: game.players, 
-              age: Math.round((now - game.createdAt) / 1000) + 's' 
-            });
           }
         }
-        console.log(`📊 Активных PvP игр: ${Object.keys(activeGames).length}`);
         setPvpGames(activeGames);
       } else {
-        console.log('📊 Активных PvP игр: 0');
         setPvpGames({});
       }
     };
-    
+
     const unsubscribe = onValue(gamesRef, handleGamesUpdate);
-    
+
     return () => {
-      console.log('🧹 Очистка подписки games_checkers');
       if (typeof unsubscribe === 'function') unsubscribe();
       off(gamesRef);
     };
@@ -112,41 +100,31 @@ const PlayersScreen = ({ navigation }) => {
 
   // ← Подписываемся на игры с ботом (с проверкой status === 'active' И время создания)
   useEffect(() => {
-    console.log('📡 Подписка на bot_games');
     const botGamesRef = ref(db, 'bot_games');
-    
+
     const handleBotGamesUpdate = (snapshot) => {
       const data = snapshot.val();
-      console.log('🔄 bot_games update:', data ? Object.keys(data).length : 'empty');
-      
+
       if (data) {
         const activeBotGames = {};
         const now = Date.now();
-        
+
         for (const [gameId, game] of Object.entries(data)) {
-          // ← ← ← КРИТИЧНО: проверяем status === 'active' И игра недавняя (< 10 минут)
           const isRecent = game.startedAt && (now - game.startedAt < 600000);
-          
+
           if (game && game.status === 'active' && game.playerId && isRecent) {
             activeBotGames[gameId] = game;
-            console.log(`✅ Активная игра с ботом: ${gameId}`, { 
-              playerId: game.playerId, 
-              age: Math.round((now - game.startedAt) / 1000) + 's' 
-            });
           }
         }
-        console.log(`📊 Активных игр с ботом: ${Object.keys(activeBotGames).length}`);
         setBotGames(activeBotGames);
       } else {
-        console.log('📊 Активных игр с ботом: 0');
         setBotGames({});
       }
     };
-    
+
     const unsubscribe = onValue(botGamesRef, handleBotGamesUpdate);
-    
+
     return () => {
-      console.log('🧹 Очистка подписки bot_games');
       if (typeof unsubscribe === 'function') unsubscribe();
       off(botGamesRef);
     };

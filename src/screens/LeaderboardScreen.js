@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { getLevelFromExp } from '../utils/levelSystem';
 
 const LeaderboardScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -91,26 +93,27 @@ const LeaderboardScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🏆 Рейтинг игроков</Text>
+    <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButtonTop} onPress={() => navigation.navigate('Menu')}>
+          <Text style={styles.backButtonTopText}>← Назад</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>🏆 Рейтинг игроков</Text>
+        <View style={{ width: 70 }} />
+      </View>
       <FlatList
         data={users}
         keyExtractor={item => item.id}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 20) }]}
       />
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Menu')}>
-          <Text style={styles.buttonText}>Назад</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -119,17 +122,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: '#444',
+  },
+  backButtonTop: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+  },
+  backButtonTopText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.textLight,
-    textAlign: 'center',
-    marginBottom: 20,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   item: {
     flexDirection: 'row',
@@ -172,23 +194,6 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     width: 60,
     textAlign: 'right',
-  },
-  buttonContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  backButton: {
-    backgroundColor: colors.secondary,
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 30,
-    width: '80%',
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
 });
 

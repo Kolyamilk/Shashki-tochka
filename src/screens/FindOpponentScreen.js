@@ -7,9 +7,11 @@ import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { initialBoard } from '../utils/checkersLogic';
 import { useInvite } from '../context/InviteContext';
+import { useGameType } from '../context/GameTypeContext';
 
 const FindOpponentScreen = ({ navigation }) => {
   const [status, setStatus] = useState('Поиск соперника...');
+  const { gameType } = useGameType();
   const waitingRef = useRef(null);
   const currentPlayerKey = useRef(null);
   const creationInProgress = useRef(false);
@@ -83,8 +85,8 @@ const FindOpponentScreen = ({ navigation }) => {
       const newPlayerRef = push(waitingRef.current);
       const key = newPlayerRef.key;
       currentPlayerKey.current = key;
-      await set(newPlayerRef, { userId, timestamp: Date.now() });
-      console.log('✅ Заявка создана в waiting_checkers:', key);
+      await set(newPlayerRef, { userId, timestamp: Date.now(), gameType: gameType || 'russian' });
+      console.log('✅ Заявка создана в waiting_checkers:', key, 'режим:', gameType);
 
       // ---------- 1. Слушаем waiting_checkers ----------
       const handleWaiting = (snapshot) => {
@@ -93,43 +95,53 @@ const FindOpponentScreen = ({ navigation }) => {
         if (!waiting) return;
         const entries = Object.entries(waiting);
         if (entries.length >= 2) {
-          const [player1, player2] = entries.slice(0, 2);
-          const [key1, data1] = player1;
-          const [key2, data2] = player2;
-          if (data1.userId === data2.userId) return;
+          // Ищем первую пару с одинаковым gameType
+          for (let i = 0; i < entries.length - 1; i++) {
+            const [key1, data1] = entries[i];
+            for (let j = i + 1; j < entries.length; j++) {
+              const [key2, data2] = entries[j];
 
-          // Удаляем заявки немедленно
-          remove(ref(db, 'waiting_checkers/' + key1));
-          remove(ref(db, 'waiting_checkers/' + key2));
-          console.log('🗑️ Заявки удалены из очереди:', key1, key2);
+              // Проверяем: разные пользователи И одинаковый режим игры
+              if (data1.userId !== data2.userId &&
+                  (data1.gameType || 'russian') === (data2.gameType || 'russian')) {
 
-          const gameId = `checkers_${key1}_${key2}`;
-          const gameRef = ref(db, 'games_checkers/' + gameId);
-          creationInProgress.current = true;
-          runTransaction(gameRef, (currentData) => {
-            if (currentData !== null) return undefined;
-            return {
-              players: { [data1.userId]: 1, [data2.userId]: 2 },
-              board: initialBoard(),
-              turn: data1.userId,
-              currentPlayer: data1.userId,
-              status: 'active',
-              createdAt: Date.now(),
-            };
-          }).then((result) => {
-            if (result.committed && isMounted.current) {
-              gameCreatedRef.current = true;
-              const myUserId = userIdRef.current;
-              const myRole = data1.userId === myUserId ? 1 : 2;
-              console.log('🚀 Переход в игру:', { gameId, myRole });
-              if (timeoutId.current) clearTimeout(timeoutId.current);
-              navigation.replace('OnlineGame', { gameId, playerKey: myUserId, myRole });
+                // Удаляем заявки немедленно
+                remove(ref(db, 'waiting_checkers/' + key1));
+                remove(ref(db, 'waiting_checkers/' + key2));
+                console.log('🗑️ Заявки удалены из очереди:', key1, key2);
+
+                const gameId = `checkers_${key1}_${key2}`;
+                const gameRef = ref(db, 'games_checkers/' + gameId);
+                creationInProgress.current = true;
+                runTransaction(gameRef, (currentData) => {
+                  if (currentData !== null) return undefined;
+                  return {
+                    players: { [data1.userId]: 1, [data2.userId]: 2 },
+                    board: initialBoard(),
+                    turn: data1.userId,
+                    currentPlayer: data1.userId,
+                    status: 'active',
+                    gameType: data1.gameType || 'russian',
+                    createdAt: Date.now(),
+                  };
+                }).then((result) => {
+                  if (result.committed && isMounted.current) {
+                    gameCreatedRef.current = true;
+                    const myUserId = userIdRef.current;
+                    const myRole = data1.userId === myUserId ? 1 : 2;
+                    console.log('🚀 Переход в игру:', { gameId, myRole, gameType: data1.gameType });
+                    if (timeoutId.current) clearTimeout(timeoutId.current);
+                    navigation.replace('OnlineGame', { gameId, playerKey: myUserId, myRole });
+                  }
+                  creationInProgress.current = false;
+                }).catch((error) => {
+                  console.error('❌ Ошибка транзакции:', error);
+                  creationInProgress.current = false;
+                });
+                return; // Выходим после создания игры
+              }
             }
-            creationInProgress.current = false;
-          }).catch((error) => {
-            console.error('❌ Ошибка транзакции:', error);
-            creationInProgress.current = false;
-          });
+          }
         }
       };
 

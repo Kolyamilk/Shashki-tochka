@@ -64,10 +64,11 @@ const MenuScreen = ({ navigation }) => {
       const snapshot = await get(usersRef);
       if (snapshot.exists()) {
         const users = Object.values(snapshot.val());
+        // Сортируем по уровню (опыту)
         const sorted = users.sort((a, b) => {
-          const rateA = a.stats?.totalGames === 0 ? 0 : a.stats?.wins / a.stats?.totalGames;
-          const rateB = b.stats?.totalGames === 0 ? 0 : b.stats?.wins / b.stats?.totalGames;
-          return rateB - rateA;
+          const expA = a.stats?.exp || 0;
+          const expB = b.stats?.exp || 0;
+          return expB - expA;
         });
         setTopPlayers(sorted.slice(0, 3));
       }
@@ -86,52 +87,43 @@ const MenuScreen = ({ navigation }) => {
 
   // ← ← ← ИСПРАВЛЕННЫЙ useEffect для подсчета онлайн
   useEffect(() => {
-    console.log('📡 Подписка на статусы игроков');
-    
     const statusRef = ref(db, 'status');
     const unsubscribe = onValue(statusRef, (snapshot) => {
       const data = snapshot.val();
-      console.log('📊 Status data:', data ? Object.keys(data).length : 'empty');
-      
+
       if (data) {
         const now = Date.now();
-        
-        // ← ← ← КРИТИЧНО: считаем онлайн только если:
-        // 1. online === true
-        // 2. lastSeen < 5 минут назад (игрок действительно активен)
+
         const online = Object.entries(data)
           .filter(([id, status]) => {
             const isOnline = status.online === true;
-            const isRecent = status.lastSeen && (now - status.lastSeen < 300000); // 5 минут
-            console.log(`User ${id}: online=${isOnline}, recent=${isRecent}, lastSeen=${status.lastSeen}`);
+            const isRecent = status.lastSeen && (now - status.lastSeen < 300000);
             return isOnline && isRecent;
           })
           .map(([id]) => id);
-        
+
         setOnlineUsers(online);
         setOnlineCount(online.length);
-        console.log(`✅ Online count: ${online.length}`);
       } else {
         setOnlineUsers([]);
         setOnlineCount(0);
-        console.log('✅ Online count: 0 (no data)');
       }
     });
-    
+
     return () => {
-      console.log('🧹 Очистка подписки на статусы');
       off(statusRef);
     };
-  }, []);  // ← ← ← Пустые зависимости - подписка создаётся один раз!
+  }, []);
 
   const renderTopPlayer = ({ item, index }) => {
-    const winRate = item.stats?.totalGames === 0 ? 0 : ((item.stats.wins / item.stats.totalGames) * 100).toFixed(1);
+    const level = getLevelFromExp(item.stats?.exp || 0).level;
+    const levelColor = getLevelColor(level);
     return (
       <View style={styles.topPlayer}>
         <Text style={styles.topRank}>{index + 1}</Text>
         <Text style={styles.topAvatar}>{item.avatar}</Text>
         <Text style={styles.topName}>{item.name}</Text>
-        <Text style={styles.topRate}>{winRate}%</Text>
+        <Text style={[styles.topLevel, { color: levelColor }]}>Ур. {level}</Text>
       </View>
     );
   };
@@ -234,7 +226,7 @@ const MenuScreen = ({ navigation }) => {
                   <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
                   <View style={styles.levelContainer}>
                     <Text style={[styles.levelText, { color: getLevelColor(getLevelFromExp(userData.stats?.exp || 0).level) }]}>
-                      ⭐ Ур. {getLevelFromExp(userData.stats?.exp || 0).level}
+                      Ур. {getLevelFromExp(userData.stats?.exp || 0).level}
                     </Text>
                   </View>
                 </View>
@@ -400,6 +392,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4ECDC4',
     width: 50,
+    textAlign: 'right',
+  },
+  topLevel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    width: 60,
     textAlign: 'right',
   },
   showAllButton: {

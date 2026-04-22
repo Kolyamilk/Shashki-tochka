@@ -841,6 +841,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         oldExp={victoryData.oldExp}
         onClose={handleVictoryClose}
         opponentLeft={victoryData.opponentLeft || false}
+        navigation={navigation}
       />
     </View>
   );
