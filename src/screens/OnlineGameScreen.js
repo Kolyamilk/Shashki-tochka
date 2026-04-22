@@ -57,6 +57,7 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
 
   // Если противник сдался/вышел - победитель получает половину опыта (150 вместо 300)
   const winnerExpGain = isSurrender ? 150 : EXP_REWARDS.WIN_ONLINE;
+  const loserExpGain = isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE;
 
   await update(winnerRef, {
     totalGames: winnerStats.totalGames + 1,
@@ -68,8 +69,63 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   await update(loserRef, {
     totalGames: loserStats.totalGames + 1,
     wins: loserStats.wins,
-    exp: loserOldExp + (isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE),
+    exp: loserOldExp + loserExpGain,
   });
+
+  // Сохраняем историю начисления опыта для обоих игроков
+  // Для победителя
+  const winnerHistoryRef = ref(db, `users/${winnerId}/expHistory`);
+  const winnerHistorySnap = await get(winnerHistoryRef);
+  const winnerHistory = winnerHistorySnap.val() || [];
+
+  // Получаем имя проигравшего
+  const loserUserSnap = await get(ref(db, `users/${loserId}`));
+  const loserUserData = loserUserSnap.val() || {};
+  const loserName = loserUserData.name || 'Игрок';
+  const loserLevel = getLevelFromExp(loserUserData.stats?.exp || 0).level;
+
+  const winnerEntry = {
+    timestamp: Date.now(),
+    gameType: 'Онлайн игра',
+    opponent: `${loserName} (${loserLevel} ур.)`,
+    result: 'win',
+    expGained: winnerExpGain,
+  };
+
+  winnerHistory.unshift(winnerEntry);
+  if (winnerHistory.length > 50) winnerHistory.pop();
+
+  await update(ref(db, `users/${winnerId}`), {
+    expHistory: winnerHistory,
+  });
+
+  // Для проигравшего (только если не сдался)
+  if (!isSurrender) {
+    const loserHistoryRef = ref(db, `users/${loserId}/expHistory`);
+    const loserHistorySnap = await get(loserHistoryRef);
+    const loserHistory = loserHistorySnap.val() || [];
+
+    // Получаем имя победителя
+    const winnerUserSnap = await get(ref(db, `users/${winnerId}`));
+    const winnerUserData = winnerUserSnap.val() || {};
+    const winnerName = winnerUserData.name || 'Игрок';
+    const winnerLevel = getLevelFromExp(winnerUserData.stats?.exp || 0).level;
+
+    const loserEntry = {
+      timestamp: Date.now(),
+      gameType: 'Онлайн игра',
+      opponent: `${winnerName} (${winnerLevel} ур.)`,
+      result: 'lose',
+      expGained: loserExpGain,
+    };
+
+    loserHistory.unshift(loserEntry);
+    if (loserHistory.length > 50) loserHistory.pop();
+
+    await update(ref(db, `users/${loserId}`), {
+      expHistory: loserHistory,
+    });
+  }
 
   return { winnerOldExp, loserOldExp, winnerExpGain };
 };
@@ -91,7 +147,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [myAvatar, setMyAvatar] = useState('');
   const [myLevel, setMyLevel] = useState(1);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
-  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0 });
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false });
 
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
@@ -131,7 +187,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
 
     // Показываем модальное окно победы
-    setVictoryData({ isWin, expGained, oldExp });
+    setVictoryData({ isWin, expGained, oldExp, opponentLeft: false });
     setVictoryModalVisible(true);
   };
 
@@ -304,7 +360,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   // ← ← ← ИСПРАВЛЕННЫЙ useEffect для Firebase
   useEffect(() => {
     const gameRef = ref(db, 'games_checkers/' + gameId);
-    const unsubscribe = onValue(gameRef, (snapshot) => {
+    const unsubscribe = onValue(gameRef, async (snapshot) => {
       const data = snapshot.val();
 
       if (currentGameIdRef.current !== gameId) {
@@ -319,15 +375,55 @@ const OnlineGameScreen = ({ route, navigation }) => {
         }
         if (!isGameEnding.current && !isCleanupDone.current) {
           isCleanupDone.current = true;
-          Alert.alert('Победа!', 'Соперник покинул игру. Ваша победа!', [
-            { 
-              text: 'OK', 
-              onPress: async () => {
-                await cleanupGame(gameId);
-                navigation.replace('Menu');
-              }
+
+          // Начисляем опыт за то, что противник вышел
+          let expGained = 50;
+          let oldExp = 0;
+
+          if (playerKey) {
+            try {
+              const userStatsRef = ref(db, `users/${playerKey}/stats`);
+              const statsSnap = await get(userStatsRef);
+              const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+
+              oldExp = stats.exp || 0;
+
+              await update(userStatsRef, {
+                totalGames: stats.totalGames + 1,
+                wins: stats.wins + 1,
+                exp: oldExp + expGained,
+              });
+
+              // Сохраняем историю начисления опыта
+              const userRef = ref(db, `users/${playerKey}`);
+              const userSnap = await get(userRef);
+              const userData = userSnap.val() || {};
+              const history = userData.expHistory || [];
+
+              const newEntry = {
+                timestamp: Date.now(),
+                gameType: 'Онлайн игра',
+                opponent: `${opponentName || 'Соперник'} (${opponentLevel} ур.)`,
+                result: 'win',
+                expGained: expGained,
+              };
+
+              history.unshift(newEntry);
+              if (history.length > 50) history.pop();
+
+              await update(userRef, {
+                expHistory: history,
+              });
+
+              console.log(`✨ Начислено ${expGained} опыта за выход противника`);
+            } catch (error) {
+              console.error('Ошибка начисления опыта:', error);
             }
-          ]);
+          }
+
+          // Показываем модальное окно победы
+          setVictoryData({ isWin: true, expGained, oldExp, opponentLeft: true });
+          setVictoryModalVisible(true);
         }
         return;
       }
@@ -453,22 +549,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        Alert.alert(
-          'Выйти из игры',
-          'Вы уверены, что хотите покинуть игру? Сопернику будет засчитана победа.',
-          [
-            { text: 'Отмена', style: 'cancel' },
-            {
-              text: 'Выйти',
-              style: 'destructive',
-              onPress: () => {
-                const opponentId = Object.keys(gameData?.players || {}).find(p => p !== playerKey);
-                if (opponentId) endGame('Вы сдались', opponentId, playerKey, true);
-                else endGame('Вы сдались');
-              },
-            },
-          ]
-        );
+        handleGiveUp();
         return true;
       };
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -531,7 +612,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleGiveUp = () => {
+  const handleGiveUp = async () => {
     Alert.alert(
       'Выйти из игры',
       'Вы уверены? Сопернику будет засчитана победа.',
@@ -540,10 +621,45 @@ const OnlineGameScreen = ({ route, navigation }) => {
         {
           text: 'Выйти',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            // Помечаем что игра завершается выходом
+            isGameEnding.current = true;
+            setGameOver(true);
+
+            // Обновляем статистику противника (он получает победу)
             const opponentId = Object.keys(gameData?.players || {}).find(p => p !== playerKey);
-            if (opponentId) endGame('Вы сдались', opponentId, playerKey, true);
-            else endGame('Вы сдались');
+            if (opponentId) {
+              try {
+                const opponentRef = ref(db, `users/${opponentId}/stats`);
+                const opponentSnap = await get(opponentRef);
+                const opponentStats = opponentSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+
+                // Противник получает половину опыта за победу (150)
+                await update(opponentRef, {
+                  totalGames: opponentStats.totalGames + 1,
+                  wins: opponentStats.wins + 1,
+                  exp: (opponentStats.exp || 0) + 150,
+                });
+
+                // Игрок не получает опыт, только обновляем счетчик игр
+                const playerRef = ref(db, `users/${playerKey}/stats`);
+                const playerSnap = await get(playerRef);
+                const playerStats = playerSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+                await update(playerRef, {
+                  totalGames: playerStats.totalGames + 1,
+                });
+              } catch (err) {
+                console.error('Ошибка обновления статистики:', err);
+              }
+            }
+
+            // Очищаем игру
+            if (!isCleanupDone.current) {
+              isCleanupDone.current = true;
+              await cleanupGame(gameId);
+            }
+
+            navigation.replace('Menu');
           },
         },
       ]
@@ -649,6 +765,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         expGained={victoryData.expGained}
         oldExp={victoryData.oldExp}
         onClose={handleVictoryClose}
+        opponentLeft={victoryData.opponentLeft || false}
       />
     </View>
   );

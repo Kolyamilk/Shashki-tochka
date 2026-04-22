@@ -18,6 +18,8 @@ const ProfileScreen = ({ navigation }) => {
   const [editAvatar, setEditAvatar] = useState('');
   const [saving, setSaving] = useState(false);
   const [levelInfoModalVisible, setLevelInfoModalVisible] = useState(false);
+  const [expHistoryModalVisible, setExpHistoryModalVisible] = useState(false);
+  const [expHistory, setExpHistory] = useState([]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -30,6 +32,7 @@ const ProfileScreen = ({ navigation }) => {
         const snapshot = await get(userRef);
         if (snapshot.exists()) {
           setUserData(snapshot.val());
+          setExpHistory(snapshot.val().expHistory || []);
         }
       } catch (error) {
         console.error(error);
@@ -158,14 +161,21 @@ const ProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         {/* Уровень и опыт */}
-        <View style={styles.levelContainer}>
+        <TouchableOpacity
+          style={styles.levelContainer}
+          onPress={() => setExpHistoryModalVisible(true)}
+          activeOpacity={0.7}
+        >
           <View style={styles.levelHeader}>
             <Text style={styles.levelText}>Уровень {levelInfo.level}</Text>
             <View style={styles.levelHeaderRight}>
               <Text style={styles.rankText}>{rankName}</Text>
               <TouchableOpacity
                 style={styles.infoButton}
-                onPress={() => setLevelInfoModalVisible(true)}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setLevelInfoModalVisible(true);
+                }}
               >
                 <Text style={styles.infoButtonText}>ℹ️</Text>
               </TouchableOpacity>
@@ -179,7 +189,9 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.expText}>
             {levelInfo.currentLevelExp} / {levelInfo.expForNextLevel} опыта
           </Text>
-        </View>
+
+          <Text style={styles.historyHint}>👆 Нажмите для просмотра истории</Text>
+        </TouchableOpacity>
 
         <View style={styles.statsContainer}>
           <Text style={styles.statsText}>Сыграно игр: {totalGames}</Text>
@@ -392,6 +404,70 @@ const ProfileScreen = ({ navigation }) => {
               onPress={() => setLevelInfoModalVisible(false)}
             >
               <Text style={styles.infoCloseButtonText}>Понятно</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модальное окно истории опыта */}
+      <Modal
+        visible={expHistoryModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setExpHistoryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.infoModalContent}>
+            <Text style={styles.infoModalTitle}>📜 История начислений опыта</Text>
+
+            <ScrollView style={styles.infoScrollView} showsVerticalScrollIndicator={false}>
+              {expHistory.length === 0 ? (
+                <View style={styles.emptyHistoryContainer}>
+                  <Text style={styles.emptyHistoryText}>История пуста</Text>
+                  <Text style={styles.emptyHistorySubtext}>Сыграйте игру, чтобы получить опыт</Text>
+                </View>
+              ) : (
+                expHistory.map((entry, index) => {
+                  const date = new Date(entry.timestamp);
+                  const dateStr = date.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  });
+                  const timeStr = date.toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+
+                  const isWin = entry.result === 'win';
+                  const resultEmoji = isWin ? '🏆' : '💪';
+                  const resultText = isWin ? 'Победа' : 'Поражение';
+                  const expColor = isWin ? '#4ECDC4' : '#FF9800';
+
+                  return (
+                    <View key={index} style={styles.historyEntry}>
+                      <View style={styles.historyHeader}>
+                        <Text style={styles.historyGameType}>{entry.gameType}</Text>
+                        <Text style={styles.historyDate}>{dateStr} {timeStr}</Text>
+                      </View>
+                      <Text style={styles.historyOpponent}>Противник: {entry.opponent}</Text>
+                      <View style={styles.historyFooter}>
+                        <Text style={styles.historyResult}>{resultEmoji} {resultText}</Text>
+                        <Text style={[styles.historyExp, { color: expColor }]}>
+                          +{entry.expGained} опыта
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.infoCloseButton}
+              onPress={() => setExpHistoryModalVisible(false)}
+            >
+              <Text style={styles.infoCloseButtonText}>Закрыть</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -760,6 +836,70 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     color: '#1a2a3a',
+  },
+  historyHint: {
+    fontSize: 12,
+    color: '#4ECDC4',
+    textAlign: 'center',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  emptyHistoryContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyHistoryText: {
+    fontSize: 16,
+    color: colors.textLight,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptyHistorySubtext: {
+    fontSize: 13,
+    color: '#8e8e93',
+  },
+  historyEntry: {
+    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4ECDC4',
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  historyGameType: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.textLight,
+  },
+  historyDate: {
+    fontSize: 11,
+    color: '#8e8e93',
+  },
+  historyOpponent: {
+    fontSize: 13,
+    color: '#aaa',
+    marginBottom: 8,
+  },
+  historyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyResult: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textLight,
+  },
+  historyExp: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

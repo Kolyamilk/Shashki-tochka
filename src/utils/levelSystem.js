@@ -4,6 +4,7 @@
 export const EXP_REWARDS = {
   WIN_ONLINE: 300,      // Победа над реальным игроком
   LOSE_ONLINE: 50,      // Поражение от реального игрока
+  OPPONENT_LEFT: 50,    // Противник вышел из игры
   WIN_BOT_EASY: 30,     // Победа над легким ботом
   WIN_BOT_MEDIUM: 50,   // Победа над средним ботом
   WIN_BOT_HARD: 80,     // Победа над сложным ботом

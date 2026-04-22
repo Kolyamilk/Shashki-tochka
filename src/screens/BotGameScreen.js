@@ -126,6 +126,34 @@ const BotGameScreen = ({ route, navigation }) => {
           await update(userStatsRef, {
             exp: oldExp + expGained,
           });
+
+          // Сохраняем историю начисления опыта
+          const expHistoryRef = ref(db, `users/${userId}/expHistory`);
+          const historySnap = await get(expHistoryRef);
+          const history = historySnap.val() || [];
+
+          const difficultyNames = {
+            easy: 'Легкий',
+            medium: 'Средний',
+            hard: 'Сложный',
+            grandmaster: 'Гроссмейстер'
+          };
+
+          const newEntry = {
+            timestamp: Date.now(),
+            gameType: gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
+            opponent: `Бот (${difficultyNames[difficulty]})`,
+            result: winner === 1 ? 'win' : 'lose',
+            expGained: expGained,
+          };
+
+          history.unshift(newEntry); // Добавляем в начало
+          if (history.length > 50) history.pop(); // Храним последние 50 записей
+
+          await update(ref(db, `users/${userId}`), {
+            expHistory: history,
+          });
+
           console.log(`✨ Начислено ${expGained} опыта`);
         } catch (error) {
           console.error('Ошибка начисления опыта:', error);
@@ -557,10 +585,10 @@ const BotGameScreen = ({ route, navigation }) => {
           text: 'Выйти',
           style: 'destructive',
           onPress: async () => {
+            // Помечаем игру как завершенную без начисления опыта
+            setGameOver(true);
             if (gameIdRef.current) {
-              await set(ref(db, `bot_games/${gameIdRef.current}`), {
-                playerId: userId,
-                difficulty: difficulty,
+              await update(ref(db, `bot_games/${gameIdRef.current}`), {
                 status: 'finished',
                 finishedAt: Date.now(),
                 result: 'player_gave_up',

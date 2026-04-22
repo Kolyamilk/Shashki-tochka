@@ -5,7 +5,7 @@ import { colors } from '../styles/globalStyles';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 import { shouldReceiveGift, getGiftForLevel } from '../utils/giftSystem';
 
-const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
+const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showGiftNotification, setShowGiftNotification] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
@@ -125,7 +125,9 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose }) => {
           ]}
         >
           {/* Заголовок */}
-          <Text style={styles.title}>{isWin ? '🎉 Победа!' : '💪 Хорошая попытка!'}</Text>
+          <Text style={styles.title}>
+            {opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '💪 Хорошая попытка!')}
+          </Text>
 
           {/* Полученный опыт */}
           <View style={styles.expContainer}>
