@@ -434,21 +434,18 @@ const ProfileScreen = ({ navigation }) => {
                     month: '2-digit',
                     year: 'numeric'
                   });
-                  const timeStr = date.toLocaleTimeString('ru-RU', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  });
 
                   const isWin = entry.result === 'win';
-                  const resultEmoji = isWin ? '🏆' : '💪';
-                  const resultText = isWin ? 'Победа' : 'Поражение';
-                  const expColor = isWin ? '#4ECDC4' : '#FF9800';
+                  const isOpponentLeft = entry.result === 'opponent_left';
+                  const resultEmoji = isWin ? '🏆' : (isOpponentLeft ? '🚪' : '💪');
+                  const resultText = isWin ? 'Победа' : (isOpponentLeft ? 'Противник покинул игру' : 'Поражение');
+                  const expColor = (isWin || isOpponentLeft) ? '#4ECDC4' : '#FF9800';
 
                   return (
                     <View key={index} style={styles.historyEntry}>
                       <View style={styles.historyHeader}>
                         <Text style={styles.historyGameType}>{entry.gameType}</Text>
-                        <Text style={styles.historyDate}>{dateStr} {timeStr}</Text>
+                        <Text style={styles.historyDate}>{dateStr}</Text>
                       </View>
                       <Text style={styles.historyOpponent}>Противник: {entry.opponent}</Text>
                       <View style={styles.historyFooter}>

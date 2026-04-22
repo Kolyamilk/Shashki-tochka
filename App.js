@@ -223,6 +223,13 @@ function AppNavigator() {
 
   const resetInviteFlags = useCallback(() => {
     console.log('🧹 Сброс флагов приглашений и пересоздание подписки');
+    console.log('📊 Текущее состояние:', {
+      hasShownAlertFor: Array.from(hasShownAlertFor.current),
+      processedAccepted: Array.from(processedAccepted.current),
+      currentAlertVisible: currentAlertVisible.current,
+      currentAlertInvId: currentAlertInvId.current
+    });
+
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     if (unsubscribeInvitations.current) {
       console.log('📡 Удаляем старую подписку');
@@ -230,6 +237,7 @@ function AppNavigator() {
       unsubscribeInvitations.current = null;
     }
     resetTimerRef.current = setTimeout(() => {
+      console.log('🔄 Пересоздаём подписку на приглашения');
       createInvitationsSubscription();
       resetTimerRef.current = null;
     }, 1000);

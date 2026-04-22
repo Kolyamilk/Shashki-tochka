@@ -23,10 +23,9 @@ const cleanupGame = async (gameId) => {
   if (!gameId) return;
   try {
     console.log(`🧹 Очистка игры ${gameId}...`);
-      await update(ref(db, `games_checkers/${gameId}`), {
-      status: 'finished',
-      finishedAt: Date.now(),
-    });
+    // Удаляем игру полностью, чтобы противник получил уведомление
+    await remove(ref(db, `games_checkers/${gameId}`));
+
     const invitationsRef = ref(db, 'invitations');
     const snapshot = await get(invitationsRef);
     if (snapshot.exists()) {
@@ -197,6 +196,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
       isCleanupDone.current = true;
       await cleanupGame(gameId);
     }
+    // Сбрасываем флаги приглашений после выхода из игры
+    resetInviteFlags();
     navigation.replace('Menu');
   };
 
@@ -376,46 +377,63 @@ const OnlineGameScreen = ({ route, navigation }) => {
         if (!isGameEnding.current && !isCleanupDone.current) {
           isCleanupDone.current = true;
 
-          // Начисляем опыт за то, что противник вышел
-          let expGained = 50;
+          // Проверяем, не начислен ли уже опыт (если противник сдался, опыт уже начислен)
+          let expGained = 0;
           let oldExp = 0;
 
           if (playerKey) {
             try {
-              const userStatsRef = ref(db, `users/${playerKey}/stats`);
-              const statsSnap = await get(userStatsRef);
-              const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
-
-              oldExp = stats.exp || 0;
-
-              await update(userStatsRef, {
-                totalGames: stats.totalGames + 1,
-                wins: stats.wins + 1,
-                exp: oldExp + expGained,
-              });
-
-              // Сохраняем историю начисления опыта
+              // Проверяем историю - если последняя запись с opponent_left уже есть, значит опыт начислен
               const userRef = ref(db, `users/${playerKey}`);
               const userSnap = await get(userRef);
               const userData = userSnap.val() || {};
               const history = userData.expHistory || [];
 
-              const newEntry = {
-                timestamp: Date.now(),
-                gameType: 'Онлайн игра',
-                opponent: `${opponentName || 'Соперник'} (${opponentLevel} ур.)`,
-                result: 'win',
-                expGained: expGained,
-              };
+              const lastEntry = history[0];
+              const alreadyRewarded = lastEntry &&
+                                      lastEntry.result === 'opponent_left' &&
+                                      (Date.now() - lastEntry.timestamp) < 5000; // Проверяем последние 5 секунд
 
-              history.unshift(newEntry);
-              if (history.length > 50) history.pop();
+              if (alreadyRewarded) {
+                // Опыт уже начислен в handleGiveUp противника
+                // Берем oldExp ДО начисления (из истории)
+                const currentExp = userData.stats?.exp || 0;
+                oldExp = currentExp - lastEntry.expGained;
+                expGained = lastEntry.expGained;
+                console.log(`ℹ️ Опыт уже начислен в handleGiveUp: ${expGained}, oldExp: ${oldExp}, currentExp: ${currentExp}`);
+              } else {
+                // Опыт еще не начислен, начисляем 150
+                const userStatsRef = ref(db, `users/${playerKey}/stats`);
+                const statsSnap = await get(userStatsRef);
+                const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
 
-              await update(userRef, {
-                expHistory: history,
-              });
+                oldExp = stats.exp || 0;
+                expGained = 150;
 
-              console.log(`✨ Начислено ${expGained} опыта за выход противника`);
+                await update(userStatsRef, {
+                  totalGames: stats.totalGames + 1,
+                  wins: stats.wins + 1,
+                  exp: oldExp + expGained,
+                });
+
+                // Сохраняем историю начисления опыта
+                const newEntry = {
+                  timestamp: Date.now(),
+                  gameType: 'Онлайн игра',
+                  opponent: `${opponentName || 'Соперник'} (${opponentLevel} ур.)`,
+                  result: 'opponent_left',
+                  expGained: expGained,
+                };
+
+                history.unshift(newEntry);
+                if (history.length > 50) history.pop();
+
+                await update(userRef, {
+                  expHistory: history,
+                });
+
+                console.log(`✨ Начислено ${expGained} опыта за выход противника. oldExp: ${oldExp}, newExp: ${oldExp + expGained}`);
+              }
             } catch (error) {
               console.error('Ошибка начисления опыта:', error);
             }
@@ -614,17 +632,16 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
   const handleGiveUp = async () => {
     Alert.alert(
-      'Выйти из игры',
+      'Сдаться',
       'Вы уверены? Сопернику будет засчитана победа.',
       [
         { text: 'Отмена', style: 'cancel' },
         {
-          text: 'Выйти',
+          text: 'Сдаться',
           style: 'destructive',
           onPress: async () => {
             // Помечаем что игра завершается выходом
             isGameEnding.current = true;
-            setGameOver(true);
 
             // Обновляем статистику противника (он получает победу)
             const opponentId = Object.keys(gameData?.players || {}).find(p => p !== playerKey);
@@ -635,10 +652,31 @@ const OnlineGameScreen = ({ route, navigation }) => {
                 const opponentStats = opponentSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
 
                 // Противник получает половину опыта за победу (150)
+                const opponentOldExp = opponentStats.exp || 0;
                 await update(opponentRef, {
                   totalGames: opponentStats.totalGames + 1,
                   wins: opponentStats.wins + 1,
-                  exp: (opponentStats.exp || 0) + 150,
+                  exp: opponentOldExp + 150,
+                });
+
+                // Сохраняем историю для противника
+                const opponentUserSnap = await get(ref(db, `users/${opponentId}`));
+                const opponentUserData = opponentUserSnap.val() || {};
+                const opponentHistory = opponentUserData.expHistory || [];
+
+                const opponentEntry = {
+                  timestamp: Date.now(),
+                  gameType: 'Онлайн игра',
+                  opponent: `${myName || 'Игрок'} (${myLevel} ур.)`,
+                  result: 'opponent_left',
+                  expGained: 150,
+                };
+
+                opponentHistory.unshift(opponentEntry);
+                if (opponentHistory.length > 50) opponentHistory.pop();
+
+                await update(ref(db, `users/${opponentId}`), {
+                  expHistory: opponentHistory,
                 });
 
                 // Игрок не получает опыт, только обновляем счетчик игр
@@ -653,10 +691,12 @@ const OnlineGameScreen = ({ route, navigation }) => {
               }
             }
 
-            // Очищаем игру
+            // Очищаем игру - удаляем запись, чтобы противник получил уведомление
             if (!isCleanupDone.current) {
               isCleanupDone.current = true;
-              await cleanupGame(gameId);
+              // Удаляем игру из Firebase
+              await remove(ref(db, `games_checkers/${gameId}`));
+              console.log('🗑️ Игра удалена, противник получит уведомление');
             }
 
             navigation.replace('Menu');
@@ -678,6 +718,10 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const myCaptured = myRole === 1 ? captured.black : captured.white;
   const opponentCaptured = myRole === 1 ? captured.white : captured.black;
 
+  // Определяем тип игры из gameData
+  const gameType = gameData?.gameType || 'classic';
+  const gameTypeName = gameType === 'giveaway' ? '🎯 Поддавки' : '♟️ Русские шашки';
+
   let captureMap = {};
   if (isMyTurn && !animatingMove && !isAnimatingRef.current) {
     for (let r = 0; r < BOARD_SIZE; r++) {
@@ -692,6 +736,13 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Режим игры вверху */}
+      <View style={styles.header}>
+        <View style={styles.gameTypeIndicator}>
+          <Text style={styles.gameTypeText}>{gameTypeName}</Text>
+        </View>
+      </View>
+
       <View style={styles.turnIndicator}>
         <Text style={[styles.turnTextBig, isMyTurn ? styles.myTurn : styles.opponentTurn]}>
           {isMyTurn ? '⚡ Ваш ход' : '⏳ Ход противника'}
@@ -756,7 +807,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
       </View>
 
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
-        <Text style={styles.giveUpText}>🚪 Выйти</Text>
+        <Text style={styles.giveUpText}>🏳️ Сдаться</Text>
       </TouchableOpacity>
 
       <VictoryModal
@@ -778,6 +829,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 20,
+  },
+  header: {
+    position: 'absolute',
+    top: 50,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  gameTypeIndicator: {
+    backgroundColor: '#2c3e50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  gameTypeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4ECDC4',
   },
   capturedRow: {
     flexDirection: 'row',
@@ -804,6 +872,7 @@ const styles = StyleSheet.create({
   },
   turnIndicator: {
     marginBottom: 10,
+    marginTop: 10,
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 40,

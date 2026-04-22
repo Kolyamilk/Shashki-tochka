@@ -20,7 +20,7 @@ import {
 import { getBestMove } from '../utils/botLogic';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
-import { EXP_REWARDS, getLevelFromExp, getLevelColor } from '../utils/levelSystem';
+import { useInvite } from '../context/InviteContext';
 import { get } from 'firebase/database';
 
 const BotGameScreen = ({ route, navigation }) => {
@@ -28,6 +28,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const { myPieceColor, opponentPieceColor } = useSettings();
   const { userId } = useAuth();
   const { gameType } = useGameType();
+  const { resetInviteFlags } = useInvite();
   
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -112,6 +113,13 @@ const BotGameScreen = ({ route, navigation }) => {
 
           oldExp = stats.exp || 0;
 
+          console.log('📊 Начисление опыта:', {
+            oldExp,
+            difficulty,
+            winner,
+            statsFromDB: stats
+          });
+
           if (winner === 1) {
             // Победа игрока
             if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
@@ -126,6 +134,8 @@ const BotGameScreen = ({ route, navigation }) => {
           await update(userStatsRef, {
             exp: oldExp + expGained,
           });
+
+          console.log(`✨ Начислено ${expGained} опыта. Было: ${oldExp}, стало: ${oldExp + expGained}`);
 
           // Сохраняем историю начисления опыта
           const expHistoryRef = ref(db, `users/${userId}/expHistory`);
@@ -171,6 +181,7 @@ const BotGameScreen = ({ route, navigation }) => {
       }
 
       // Показываем модальное окно победы
+      console.log('🎉 Открываем VictoryModal:', { isWin, expGained, oldExp });
       setVictoryData({ isWin, expGained, oldExp });
       setVictoryModalVisible(true);
     };
@@ -455,6 +466,8 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const handleVictoryClose = () => {
     setVictoryModalVisible(false);
+    // Сбрасываем флаги приглашений после выхода из игры
+    resetInviteFlags();
     navigation.goBack();
   };
 

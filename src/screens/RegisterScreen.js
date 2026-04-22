@@ -55,6 +55,7 @@ const RegisterScreen = ({ navigation }) => {
         stats: {
           totalGames: 0,
           wins: 0,
+          exp: 0,
         },
       };
 

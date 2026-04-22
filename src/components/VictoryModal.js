@@ -4,16 +4,16 @@ import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity } from 'react
 import { colors } from '../styles/globalStyles';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 import { shouldReceiveGift, getGiftForLevel } from '../utils/giftSystem';
+import GiftReceivedModal from './GiftReceivedModal';
 
 const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
-  const [showGiftNotification, setShowGiftNotification] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
+  const [showGiftModal, setShowGiftModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const levelUpAnim = useRef(new Animated.Value(0)).current;
-  const giftAnim = useRef(new Animated.Value(0)).current;
 
   const oldLevelInfo = getLevelFromExp(oldExp);
   const newLevelInfo = getLevelFromExp(oldExp + expGained);
@@ -72,16 +72,10 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
                   useNativeDriver: true,
                 }),
               ]).start(() => {
-                // Показываем уведомление о подарке после анимации уровня
+                // Показываем модальное окно подарка после анимации уровня
                 if (receivedGift) {
                   setTimeout(() => {
-                    setShowGiftNotification(true);
-                    Animated.spring(giftAnim, {
-                      toValue: 1,
-                      friction: 6,
-                      tension: 40,
-                      useNativeDriver: true,
-                    }).start();
+                    setShowGiftModal(true);
                   }, 500);
                 }
               });
@@ -95,10 +89,9 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
       scaleAnim.setValue(0.5);
       progressAnim.setValue(0);
       levelUpAnim.setValue(0);
-      giftAnim.setValue(0);
       setShowLevelUp(false);
-      setShowGiftNotification(false);
       setReceivedGift(null);
+      setShowGiftModal(false);
     }
   }, [visible, leveledUp]);
 
@@ -138,8 +131,10 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
           {/* Прогресс-бар */}
           <View style={styles.levelSection}>
             <View style={styles.levelHeader}>
-              <Text style={styles.levelText}>Уровень {oldLevelInfo.level}</Text>
-              <Text style={styles.rankText}>{rankName}</Text>
+              <Text style={styles.levelText}>
+                Уровень {leveledUp ? oldLevelInfo.level : newLevelInfo.level}
+              </Text>
+              <Text style={styles.rankText}>{leveledUp ? getRankName(oldLevelInfo.level) : rankName}</Text>
             </View>
 
             <View style={styles.progressBarContainer}>
@@ -148,14 +143,14 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
                   styles.progressBar,
                   {
                     width: progressWidth,
-                    backgroundColor: levelColor,
+                    backgroundColor: leveledUp ? getLevelColor(oldLevelInfo.level) : levelColor,
                   },
                 ]}
               />
             </View>
 
             <Text style={styles.progressText}>
-              {newLevelInfo.currentLevelExp} / {newLevelInfo.expForNextLevel}
+              {leveledUp ? `${oldLevelInfo.currentLevelExp + expGained} / ${oldLevelInfo.expForNextLevel}` : `${newLevelInfo.currentLevelExp} / ${newLevelInfo.expForNextLevel}`}
             </Text>
           </View>
 
@@ -183,37 +178,22 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
             </Animated.View>
           )}
 
-          {/* Уведомление о подарке */}
-          {showGiftNotification && receivedGift && (
-            <Animated.View
-              style={[
-                styles.giftNotification,
-                {
-                  opacity: giftAnim,
-                  transform: [
-                    {
-                      scale: giftAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.5, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.giftEmoji}>{receivedGift.emoji}</Text>
-              <Text style={styles.giftTitle}>🎁 Новый подарок!</Text>
-              <Text style={styles.giftName}>{receivedGift.name}</Text>
-              <Text style={styles.giftDescription}>Проверьте раздел "Мои подарки"</Text>
-            </Animated.View>
-          )}
-
           {/* Кнопка закрытия */}
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={styles.closeButtonText}>Продолжить</Text>
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
+
+      {/* Модальное окно подарка */}
+      <GiftReceivedModal
+        visible={showGiftModal}
+        gift={receivedGift}
+        onClose={() => {
+          setShowGiftModal(false);
+          onClose();
+        }}
+      />
     </Modal>
   );
 };
@@ -327,38 +307,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: colors.textLight,
-  },
-  giftNotification: {
-    backgroundColor: 'rgba(243, 156, 18, 0.2)',
-    borderRadius: 20,
-    padding: 20,
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#f39c12',
-  },
-  giftEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  giftTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#f39c12',
-    marginBottom: 8,
-  },
-  giftName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textLight,
-    marginBottom: 4,
-  },
-  giftDescription: {
-    fontSize: 13,
-    color: '#aaa',
-    textAlign: 'center',
   },
   closeButton: {
     backgroundColor: '#4ECDC4',
