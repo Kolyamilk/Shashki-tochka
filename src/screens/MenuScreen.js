@@ -16,6 +16,8 @@ const MenuScreen = ({ navigation }) => {
   const [topPlayers, setTopPlayers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [onlineCount, setOnlineCount] = useState(0);
+  const [hasNewGifts, setHasNewGifts] = useState(false);
+  const [latestGiftEmoji, setLatestGiftEmoji] = useState('');
 
   // Загружаем данные текущего пользователя
   const fetchUserData = useCallback(async () => {
@@ -33,7 +35,23 @@ const MenuScreen = ({ navigation }) => {
     const userRef = ref(db, `users/${userId}`);
     const unsubscribe = onValue(userRef, (snapshot) => {
       if (snapshot.exists()) {
-        setUserData(snapshot.val());
+        const data = snapshot.val();
+        setUserData(data);
+
+        // Проверяем наличие новых подарков
+        const newGifts = data.newGifts || [];
+        setHasNewGifts(newGifts.length > 0);
+
+        // Получаем эмодзи последнего подарка
+        if (newGifts.length > 0) {
+          const latestGiftId = newGifts[newGifts.length - 1];
+          const level = parseInt(latestGiftId.replace('gift_level_', ''));
+          const { LEVEL_GIFTS } = require('../utils/giftSystem');
+          const gift = LEVEL_GIFTS[level];
+          if (gift) {
+            setLatestGiftEmoji(gift.emoji);
+          }
+        }
       }
     });
     return () => off(userRef);
@@ -201,7 +219,17 @@ const MenuScreen = ({ navigation }) => {
           >
             {userData ? (
               <View style={styles.profileInfo}>
-                <Text style={styles.avatar}>{userData.avatar}</Text>
+                <View style={styles.avatarContainer}>
+                  <Text style={styles.avatar}>{userData.avatar}</Text>
+                  {hasNewGifts && (
+                    <View style={styles.giftBadge}>
+                      <Text style={styles.giftBadgeEmoji}>{latestGiftEmoji}</Text>
+                      <View style={styles.giftBadgePlus}>
+                        <Text style={styles.giftBadgePlusText}>+</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
                 <View style={styles.userInfo}>
                   <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
                   <View style={styles.levelContainer}>
@@ -223,7 +251,7 @@ const MenuScreen = ({ navigation }) => {
           >
             <Text style={styles.settingsIcon}>⚙️</Text>
           </TouchableOpacity>
-        
+
         </View>
       </ScrollView>
     </View>
@@ -417,9 +445,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 10,
+  },
   avatar: {
     fontSize: 28,
-    marginRight: 10,
+  },
+  giftBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderWidth: 2,
+    borderColor: '#1a2a3a',
+  },
+  giftBadgeEmoji: {
+    fontSize: 14,
+  },
+  giftBadgePlus: {
+    marginLeft: 2,
+  },
+  giftBadgePlusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
   },
   userInfo: {
     flexDirection: 'column',

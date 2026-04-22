@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
-import { ref, get } from 'firebase/database';
+import { ref, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
+import { getLevelFromExp } from '../utils/levelSystem';
 
 const LeaderboardScreen = ({ navigation }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   useEffect(() => {
     const loadLeaderboard = async () => {
@@ -18,13 +20,14 @@ const LeaderboardScreen = ({ navigation }) => {
           const userList = Object.keys(data).map(key => ({
             id: key,
             ...data[key],
-            stats: data[key].stats || { totalGames: 0, wins: 0 }, // гарантия наличия stats
+            stats: data[key].stats || { totalGames: 0, wins: 0, exp: 0 },
+            level: getLevelFromExp(data[key].stats?.exp || 0).level,
           }));
-          // Сортировка по проценту побед
+          // Сортировка по уровню (опыту)
           userList.sort((a, b) => {
-            const rateA = a.stats.totalGames === 0 ? 0 : (a.stats.wins / a.stats.totalGames);
-            const rateB = b.stats.totalGames === 0 ? 0 : (b.stats.wins / b.stats.totalGames);
-            return rateB - rateA;
+            const expA = a.stats.exp || 0;
+            const expB = b.stats.exp || 0;
+            return expB - expA;
           });
           setUsers(userList);
         }
@@ -35,6 +38,28 @@ const LeaderboardScreen = ({ navigation }) => {
       }
     };
     loadLeaderboard();
+  }, []);
+
+  // Подписка на онлайн-статусы
+  useEffect(() => {
+    const statusRef = ref(db, 'status');
+    const unsubscribe = onValue(statusRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const now = Date.now();
+        const online = Object.entries(data)
+          .filter(([id, status]) => {
+            const isOnline = status.online === true;
+            const isRecent = status.lastSeen && (now - status.lastSeen < 300000); // 5 минут
+            return isOnline && isRecent;
+          })
+          .map(([id]) => id);
+        setOnlineUsers(online);
+      } else {
+        setOnlineUsers([]);
+      }
+    });
+    return () => off(statusRef);
   }, []);
 
   const showPlayerStats = (user) => {
@@ -49,13 +74,17 @@ const LeaderboardScreen = ({ navigation }) => {
   };
 
   const renderItem = ({ item, index }) => {
-    const winRate = item.stats.totalGames === 0 ? 0 : ((item.stats.wins / item.stats.totalGames) * 100).toFixed(1);
+    const level = item.level || 1;
+    const isOnline = onlineUsers.includes(item.id);
     return (
       <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('PlayerProfile', { playerId: item.id })}>
         <Text style={styles.rank}>{index + 1}</Text>
         <Text style={styles.avatar}>{item.avatar}</Text>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.rate}>{winRate}%</Text>
+        <View style={styles.nameContainer}>
+          <Text style={styles.name}>{item.name}</Text>
+          {isOnline && <View style={styles.onlineIndicator} />}
+        </View>
+        <Text style={styles.rate}>Ур. {level}</Text>
       </TouchableOpacity>
     );
   };
@@ -121,10 +150,21 @@ const styles = StyleSheet.create({
     fontSize: 28,
     marginHorizontal: 10,
   },
-  name: {
+  nameContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  name: {
     fontSize: 16,
     color: colors.textLight,
+    marginRight: 8,
+  },
+  onlineIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4ECDC4',
   },
   rate: {
     fontSize: 16,

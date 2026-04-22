@@ -16,6 +16,7 @@ import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { getAvailableGifts, RARITY_COLORS, RARITY_NAMES } from '../utils/giftSystem';
 import { getLevelFromExp } from '../utils/levelSystem';
+import ExpGainModal from '../components/ExpGainModal';
 
 const ProfileGiftScreen = ({ navigation }) => {
   const { userId } = useAuth();
@@ -23,10 +24,37 @@ const ProfileGiftScreen = ({ navigation }) => {
   const [userGifts, setUserGifts] = useState([]);
   const [selectedGift, setSelectedGift] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [expModalVisible, setExpModalVisible] = useState(false);
+  const [expGainData, setExpGainData] = useState({ expGained: 0, oldExp: 0 });
+  const [newGiftIds, setNewGiftIds] = useState([]);
 
   useEffect(() => {
     loadUserGifts();
+    markGiftsAsViewed();
   }, [userId]);
+
+  const markGiftsAsViewed = async () => {
+    if (!userId) return;
+
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+
+      if (snapshot.exists()) {
+        const userData = snapshot.val();
+        const newGifts = userData.newGifts || [];
+
+        // Если есть новые подарки, очищаем список
+        if (newGifts.length > 0) {
+          await update(userRef, {
+            newGifts: [],
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка пометки подарков как просмотренных:', error);
+    }
+  };
 
   const loadUserGifts = async () => {
     if (!userId) return;
@@ -44,6 +72,10 @@ const ProfileGiftScreen = ({ navigation }) => {
 
         // Получаем подарки пользователя из БД (проданные подарки)
         const soldGifts = userData.soldGifts || [];
+
+        // Получаем список новых подарков
+        const newGifts = userData.newGifts || [];
+        setNewGiftIds(newGifts);
 
         // Фильтруем подарки - показываем только те, что не проданы
         const userGiftsList = availableGifts.filter(
@@ -90,9 +122,18 @@ const ProfileGiftScreen = ({ navigation }) => {
                   soldGifts: [...soldGifts, selectedGift.id],
                 });
 
-                Alert.alert('Успешно!', `Вы получили ${selectedGift.sellValue} опыта!`);
+                // Закрываем модальное окно подарка
                 setModalVisible(false);
-                loadUserGifts(); // Перезагружаем список
+
+                // Показываем анимацию получения опыта
+                setExpGainData({
+                  expGained: selectedGift.sellValue,
+                  oldExp: currentExp,
+                });
+                setExpModalVisible(true);
+
+                // Перезагружаем список подарков
+                loadUserGifts();
               }
             } catch (error) {
               console.error('Ошибка продажи подарка:', error);
@@ -103,22 +144,35 @@ const ProfileGiftScreen = ({ navigation }) => {
       ]
     );
   };
-  const renderGiftItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.giftCard, { borderColor: RARITY_COLORS[item.rarity] }]}
-      activeOpacity={0.8}
-      onPress={() => handleGiftPress(item)}
-    >
-      <View style={[styles.giftEmojiContainer, { backgroundColor: `${RARITY_COLORS[item.rarity]}20` }]}>
-        <Text style={styles.giftEmoji}>{item.emoji}</Text>
-      </View>
-      <Text style={styles.giftName} numberOfLines={2}>{item.name}</Text>
-      <Text style={[styles.giftRarity, { color: RARITY_COLORS[item.rarity] }]}>
-        {RARITY_NAMES[item.rarity]}
-      </Text>
-      <Text style={styles.giftLevel}>Уровень {item.level}</Text>
-    </TouchableOpacity>
-  );
+  const renderGiftItem = ({ item }) => {
+    const isNew = newGiftIds.includes(item.id);
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.giftCard,
+          { borderColor: RARITY_COLORS[item.rarity] },
+          isNew && styles.newGiftCard
+        ]}
+        activeOpacity={0.8}
+        onPress={() => handleGiftPress(item)}
+      >
+        {isNew && (
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>NEW</Text>
+          </View>
+        )}
+        <View style={[styles.giftEmojiContainer, { backgroundColor: `${RARITY_COLORS[item.rarity]}20` }]}>
+          <Text style={styles.giftEmoji}>{item.emoji}</Text>
+        </View>
+        <Text style={styles.giftName} numberOfLines={2}>{item.name}</Text>
+        <Text style={[styles.giftRarity, { color: RARITY_COLORS[item.rarity] }]}>
+          {RARITY_NAMES[item.rarity]}
+        </Text>
+        <Text style={styles.giftLevel}>Уровень {item.level}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -206,6 +260,15 @@ const ProfileGiftScreen = ({ navigation }) => {
             </View>
           </View>
         </Modal>
+
+        {/* Модальное окно получения опыта */}
+        <ExpGainModal
+          visible={expModalVisible}
+          expGained={expGainData.expGained}
+          oldExp={expGainData.oldExp}
+          onClose={() => setExpModalVisible(false)}
+          source="Продажа подарка"
+        />
       </View>
     </SafeAreaView>
   );
@@ -283,6 +346,27 @@ const styles = StyleSheet.create({
     elevation: 5,
     minHeight: 140,
     borderWidth: 2,
+    position: 'relative',
+  },
+  newGiftCard: {
+    borderWidth: 3,
+    borderColor: '#FFD700',
+    backgroundColor: '#3a4a5a',
+  },
+  newBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#FFD700',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 1,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
   },
   giftEmojiContainer: {
     width: 60,

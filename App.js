@@ -105,8 +105,9 @@ function AppNavigator() {
       }
 
       console.log('📨 Всего приглашений:', Object.keys(data).length);
+      console.log('📨 Мой userId:', userId);
       for (const [invId, invData] of Object.entries(data)) {
-        console.log(`📋 Проверка приглашения ${invId}: from=${invData.from}, to=${invData.to}, status=${invData.status}, gameType=${invData.gameType}`);
+        console.log(`📋 Проверка приглашения ${invId}: from=${invData.from}, to=${invData.to}, status=${invData.status}, gameType=${invData.gameType}, myUserId=${userId}`);
 
         // 1. Входящее приглашение (получатель)
         if (invData.to === userId && invData.status === 'pending') {

@@ -22,6 +22,7 @@ import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { useInvite } from '../context/InviteContext';
 import { get } from 'firebase/database';
+import { EXP_REWARDS, getLevelFromExp } from '../utils/levelSystem';
 
 const BotGameScreen = ({ route, navigation }) => {
   const { difficulty } = route.params;
@@ -160,9 +161,30 @@ const BotGameScreen = ({ route, navigation }) => {
           history.unshift(newEntry); // Добавляем в начало
           if (history.length > 50) history.pop(); // Храним последние 50 записей
 
-          await update(ref(db, `users/${userId}`), {
+          // Проверяем, получил ли игрок новый подарок
+          const oldLevel = getLevelFromExp(oldExp).level;
+          const newLevel = getLevelFromExp(oldExp + expGained).level;
+          const leveledUp = newLevel > oldLevel;
+
+          const updateData = {
             expHistory: history,
-          });
+          };
+
+          // Если повысился уровень и это кратно 5, добавляем новый подарок в список непросмотренных
+          if (leveledUp && newLevel % 5 === 0) {
+            const userRef = ref(db, `users/${userId}`);
+            const userSnap = await get(userRef);
+            const userData = userSnap.val() || {};
+            const newGifts = userData.newGifts || [];
+
+            // Добавляем ID подарка в список новых, если его там ещё нет
+            const giftId = `gift_level_${newLevel}`;
+            if (!newGifts.includes(giftId)) {
+              updateData.newGifts = [...newGifts, giftId];
+            }
+          }
+
+          await update(ref(db, `users/${userId}`), updateData);
 
           console.log(`✨ Начислено ${expGained} опыта`);
         } catch (error) {

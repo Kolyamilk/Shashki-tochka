@@ -94,9 +94,30 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   winnerHistory.unshift(winnerEntry);
   if (winnerHistory.length > 50) winnerHistory.pop();
 
-  await update(ref(db, `users/${winnerId}`), {
+  // Проверяем, получил ли победитель новый подарок
+  const winnerOldLevel = getLevelFromExp(winnerOldExp).level;
+  const winnerNewLevel = getLevelFromExp(winnerOldExp + winnerExpGain).level;
+  const leveledUp = winnerNewLevel > winnerOldLevel;
+
+  const updateData = {
     expHistory: winnerHistory,
-  });
+  };
+
+  // Если повысился уровень и это кратно 5, добавляем новый подарок в список непросмотренных
+  if (leveledUp && winnerNewLevel % 5 === 0) {
+    const winnerUserRef = ref(db, `users/${winnerId}`);
+    const winnerUserSnap = await get(winnerUserRef);
+    const winnerUserData = winnerUserSnap.val() || {};
+    const newGifts = winnerUserData.newGifts || [];
+
+    // Добавляем ID подарка в список новых, если его там ещё нет
+    const giftId = `gift_level_${winnerNewLevel}`;
+    if (!newGifts.includes(giftId)) {
+      updateData.newGifts = [...newGifts, giftId];
+    }
+  }
+
+  await update(ref(db, `users/${winnerId}`), updateData);
 
   // Для проигравшего (только если не сдался)
   if (!isSurrender) {
@@ -465,14 +486,16 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
       const boardToCompare = lastBoardRef.current || newBoard;
       const hasChanged = lastBoardRef.current ? JSON.stringify(boardToCompare) !== JSON.stringify(newBoard) : false;
-      
+
       const wasMyLastMove = lastMoveWasMineRef.current;
-      
-      console.log('📊 Firebase update:', { 
-        hasChanged, 
+
+      console.log('📊 Firebase update:', {
+        hasChanged,
         isAnimating: isAnimatingRef.current,
         wasMyLastMove,
-        hasLastBoard: !!lastBoardRef.current
+        hasLastBoard: !!lastBoardRef.current,
+        currentPlayer: data.currentPlayer,
+        myKey: playerKey
       });
 
       // ← ← ← Анимация ТОЛЬКО если:
@@ -480,7 +503,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
       // 2. Нет текущей анимации
       // 3. Это НЕ был мой последний ход
       // 4. Есть lastBoardRef
-      if (hasChanged && !animatingMove && !isAnimatingRef.current && !wasMyLastMove && lastBoardRef.current) {
+      // 5. Сейчас НЕ мой ход (currentPlayer !== playerKey)
+      if (hasChanged && !animatingMove && !isAnimatingRef.current && !wasMyLastMove && lastBoardRef.current && data.currentPlayer !== playerKey) {
         console.log('🎬 Запуск анимации хода соперника...');
         
         let from = null, to = null, movedPiece = null;
