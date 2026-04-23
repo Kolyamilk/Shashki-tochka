@@ -14,6 +14,7 @@ import { ref, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';  // ← ← ← Импортируем useAuth
+import { getLevelFromExp, getLevelColor } from '../utils/levelSystem';
 
 const PlayersScreen = ({ navigation }) => {
   const { userId } = useAuth();  // ← ← ← Получаем текущий userId
@@ -210,10 +211,12 @@ const PlayersScreen = ({ navigation }) => {
     const isOnline = status?.online === true;
     const lastSeen = status?.lastSeen;
     const gameStatusText = getGameStatusText(item.id);
+    const level = getLevelFromExp(item?.stats?.exp || 0).level;
+    const levelColor = getLevelColor(level);
 
     return (
-      <TouchableOpacity 
-        style={styles.playerItem} 
+      <TouchableOpacity
+        style={styles.playerItem}
         onPress={() => navigation.navigate('PlayerProfile', { playerId: item.id })}
         onLongPress={() => showPlayerStats(item)}
       >
@@ -222,8 +225,11 @@ const PlayersScreen = ({ navigation }) => {
           <View style={styles.playerDetails}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{item?.name || 'Неизвестный'}</Text>
+              <Text style={[styles.levelBadge, { color: levelColor }]}>
+                ⭐ Ур. {level}
+              </Text>
             </View>
-            
+
             {/* ← Показываем статус игры если есть */}
             {gameStatusText ? (
               <View style={styles.gameStatusContainer}>
@@ -350,11 +356,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
+    gap: 8,
   },
   name: {
     fontSize: 16,
     fontWeight: 'bold',
     color: colors.textLight,
+  },
+  levelBadge: {
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   // ← Новый стиль для статуса игры
   gameStatusContainer: {

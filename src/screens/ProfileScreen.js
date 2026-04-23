@@ -1,33 +1,18 @@
 // src/screens/ProfileScreen.js
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, TextInput, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
 import { ref, get, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
-
-const AVATARS = [
-  '😀', '😎', '🤓', '😇', '🥳', '🤠', '🤡', '👻', '🤖', '👽',
-  '🦄', '🐶', '🐱', '🐼', '🦊', '🐯', '🦁', '🐸', '🐵', '🐨',
-  '🐷', '🐮', '🐔', '🐧', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴',
-  '🦓', '🦒', '🦘', '🦙', '🦥', '🦦', '🦨', '🦡', '🐘', '🦏',
-  '🐉', '🦖', '🦕', '🐢', '🐊', '🐍', '🦎', '🐙', '🦑', '🦞',
-  '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🦈', '🦭', '🐋', '🦛',
-  '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸',
-  '🥊', '🥋', '🎯', '🎮', '🎲', '🎰', '🎪', '🎭', '🎨', '🎬',
-  '🎸', '🎹', '🎺', '🎻', '🥁', '🎤', '🎧', '🎼', '🎵', '🎶',
-  '👑', '💎', '💍', '🔥', '⚡', '⭐', '🌟', '✨', '💫', '🌈',
-  '🍕', '🍔', '🍟', '🌭', '🍿', '🧁', '🍰', '🎂', '🍩', '🍪',
-  '🚀', '🛸', '🛰️', '🌍', '🌎', '🌏', '🌙', '☀️', '🪐', '💥'
-];
+import { AVATAR_CONFIG, isAvatarUnlocked, getRequirementText } from '../utils/avatarSystem';
 
 const ProfileScreen = ({ navigation }) => {
   const { userId, logout } = useAuth();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
   const [saving, setSaving] = useState(false);
   const [levelInfoModalVisible, setLevelInfoModalVisible] = useState(false);
@@ -84,38 +69,23 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const openEditModal = () => {
-    setEditName(userData.name);
     setEditAvatar(userData.avatar);
     setEditModalVisible(true);
   };
 
   const saveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert('Ошибка', 'Имя не может быть пустым');
-      return;
-    }
-    if (editName.trim().length < 2) {
-      Alert.alert('Ошибка', 'Имя должно содержать минимум 2 символа');
-      return;
-    }
-    if (editName.trim().length > 20) {
-      Alert.alert('Ошибка', 'Имя не должно превышать 20 символов');
-      return;
-    }
-
     setSaving(true);
     try {
       const userRef = ref(db, `users/${userId}`);
       await update(userRef, {
-        name: editName.trim(),
         avatar: editAvatar,
       });
-      setUserData({ ...userData, name: editName.trim(), avatar: editAvatar });
+      setUserData({ ...userData, avatar: editAvatar });
       setEditModalVisible(false);
-      Alert.alert('Успешно', 'Профиль обновлен');
+      Alert.alert('Успешно', 'Аватар обновлен');
     } catch (error) {
       console.error(error);
-      Alert.alert('Ошибка', 'Не удалось обновить профиль');
+      Alert.alert('Ошибка', 'Не удалось обновить аватар');
     } finally {
       setSaving(false);
     }
@@ -229,39 +199,82 @@ const ProfileScreen = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Редактировать профиль</Text>
+            <Text style={styles.modalTitle}>Выбрать аватар</Text>
 
-            <Text style={styles.label}>Выберите аватар</Text>
             <ScrollView
               style={styles.avatarGridScroll}
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.avatarGrid}>
-                {AVATARS.map((avatar) => (
-                  <TouchableOpacity
-                    key={avatar}
-                    style={[
-                      styles.avatarOption,
-                      editAvatar === avatar && styles.avatarOptionSelected
-                    ]}
-                    onPress={() => setEditAvatar(avatar)}
-                  >
-                    <Text style={styles.avatarOptionText}>{avatar}</Text>
-                  </TouchableOpacity>
-                ))}
+                {AVATAR_CONFIG
+                  .map((avatarConfig) => ({
+                    ...avatarConfig,
+                    unlocked: isAvatarUnlocked(
+                      avatarConfig,
+                      userData?.stats,
+                      getLevelFromExp(userData?.stats?.exp || 0).level
+                    )
+                  }))
+                  .sort((a, b) => {
+                    // Сортировка: разблокированные сначала, заблокированные внизу
+                    if (a.unlocked && !b.unlocked) return -1;
+                    if (!a.unlocked && b.unlocked) return 1;
+                    return 0;
+                  })
+                  .map((avatarConfig) => {
+                    const { unlocked } = avatarConfig;
+                    const requirementText = getRequirementText(avatarConfig.requirement);
+                    const isSelected = editAvatar === avatarConfig.emoji;
+
+                    // Короткий текст требования для отображения
+                    let shortRequirement = '';
+                    if (avatarConfig.requirement.type !== 'none') {
+                      const { type, value } = avatarConfig.requirement;
+                      if (type === 'level') shortRequirement = `${value} ур.`;
+                      else if (type === 'games') shortRequirement = `${value} игр`;
+                      else if (type === 'wins') shortRequirement = `${value} побед`;
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={avatarConfig.emoji}
+                        style={[
+                          styles.avatarOption,
+                          isSelected && styles.avatarOptionSelected,
+                          !unlocked && styles.avatarOptionLocked
+                        ]}
+                        onPress={() => {
+                          if (unlocked) {
+                            setEditAvatar(avatarConfig.emoji);
+                          } else {
+                            Alert.alert('Заблокировано', requirementText);
+                          }
+                        }}
+                      >
+                        <Text style={[
+                          styles.avatarOptionText,
+                          !unlocked && styles.avatarOptionTextLocked
+                        ]}>
+                          {avatarConfig.emoji}
+                        </Text>
+                        {shortRequirement && (
+                          <View style={[
+                            styles.requirementBadge,
+                            unlocked && styles.requirementBadgeUnlocked
+                          ]}>
+                            <Text style={[
+                              styles.requirementText,
+                              unlocked && styles.requirementTextUnlocked
+                            ]}>
+                              {shortRequirement}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
               </View>
             </ScrollView>
-
-            <Text style={styles.label}>Имя игрока</Text>
-            <TextInput
-              style={styles.input}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Введите имя"
-              placeholderTextColor="#8e8e93"
-              maxLength={20}
-            />
-            <Text style={styles.charCount}>{editName.length}/20</Text>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -712,14 +725,45 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
   },
   avatarOptionSelected: {
     borderColor: '#4ECDC4',
     backgroundColor: 'rgba(78, 205, 196, 0.3)',
     transform: [{ scale: 1.05 }],
   },
+  avatarOptionLocked: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    opacity: 0.5,
+  },
   avatarOptionText: {
     fontSize: 28,
+  },
+  avatarOptionTextLocked: {
+    opacity: 0.4,
+  },
+  requirementBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
+  requirementBadgeUnlocked: {
+    backgroundColor: 'rgba(78, 205, 196, 0.8)',
+  },
+  requirementText: {
+    fontSize: 8,
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  requirementTextUnlocked: {
+    color: '#1a2a3a',
   },
   input: {
     backgroundColor: '#1a2a3a',

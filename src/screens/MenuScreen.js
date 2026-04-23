@@ -138,7 +138,7 @@ const MenuScreen = ({ navigation }) => {
       >
         <View style={styles.onlineBadge}>
           <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>Онлайн: {onlineCount}</Text>
+          <Text style={styles.onlineText}>Онлайн</Text>
         </View>
       </TouchableOpacity>
 

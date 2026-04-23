@@ -329,39 +329,49 @@ const OnlineGameScreen = ({ route, navigation }) => {
       });
 
       // ★★★ ИСПРАВЛЕНИЕ: убрано условие data.currentPlayer !== playerKey ★★★
-      if (hasChanged && !animatingMove && !isAnimatingRef.current && !wasMyLastMove && lastBoardRef.current) {
+      if (hasChanged && !isAnimatingRef.current && !wasMyLastMove && lastBoardRef.current) {
         console.log('🎬 Запуск анимации хода соперника...');
-        
+
+        // Сбрасываем состояние анимации перед началом
+        setAnimatingMove(null);
+
         let from = null, to = null, movedPiece = null;
-        
+        let capturedPositions = [];
+
+        // Сначала находим все изменения
         for (let r = 0; r < BOARD_SIZE; r++) {
           for (let c = 0; c < BOARD_SIZE; c++) {
             const oldPiece = boardToCompare[r]?.[c];
             const newPiece = newBoard[r][c];
-            if (oldPiece && !newPiece) { from = { row: r, col: c }; movedPiece = oldPiece; }
-            else if (!oldPiece && newPiece) { to = { row: r, col: c }; }
+
+            // Шашка исчезла
+            if (oldPiece && !newPiece) {
+              // Определяем, это исходная позиция или съеденная шашка
+              if (oldPiece.player !== myRole) {
+                // Это шашка противника - исходная позиция
+                from = { row: r, col: c };
+                movedPiece = oldPiece;
+              } else {
+                // Это моя шашка - была съедена
+                capturedPositions.push({ row: r, col: c });
+              }
+            }
+            // Шашка появилась
+            else if (!oldPiece && newPiece) {
+              to = { row: r, col: c };
+            }
           }
         }
 
         if (from && to && movedPiece) {
           const isOpponentMove = movedPiece.player !== myRole;
-          
-          console.log('📍 Найдено:', { from, to, movedPiece, isOpponentMove });
+
+          console.log('📍 Найдено:', { from, to, movedPiece, isOpponentMove, capturedPositions });
 
           if (isOpponentMove) {
-            let wasCapture = false, capturedRow = null, capturedCol = null;
-            for (let r = 0; r < BOARD_SIZE; r++) {
-              for (let c = 0; c < BOARD_SIZE; c++) {
-                const oldPiece = boardToCompare[r]?.[c];
-                const newPiece = newBoard[r][c];
-                if (oldPiece && !newPiece && (r !== from.row || c !== from.col)) {
-                  wasCapture = true;
-                  capturedRow = r;
-                  capturedCol = c;
-                  break;
-                }
-              }
-            }
+            let wasCapture = capturedPositions.length > 0;
+            let capturedRow = wasCapture ? capturedPositions[0].row : null;
+            let capturedCol = wasCapture ? capturedPositions[0].col : null;
 
             const willBeKing = (!movedPiece.king && ((movedPiece.player === 1 && to.row === 7) || (movedPiece.player === 2 && to.row === 0)));
             const newKing = movedPiece.king ? true : willBeKing;
