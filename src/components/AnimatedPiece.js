@@ -54,15 +54,16 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture
 
   const renderKingSymbol = () => {
     switch (kingStyle) {
-      case 'star': return '⭐';
-      case 'fire': return '🔥';
-      case 'diamond': return '💎';
-      case 'dove': return '🕊️';
-      case 'heart': return '♥️';
-      case 'poop': return '💩';
-      case 'square': return '■';
-      case 'rhombus': return '♛';
-      default: return '👑';
+      case 'crown': return '♔';
+      case 'queen': return '♛';
+      case 'star': return '★';
+      case 'heart': return '♡';
+      case 'skull': return '☠';
+      case 'shield': return '⛨';
+      case 'cross': return '✚';
+      case 'flower': return '✿';
+      case 'peace': return '☮';
+      default: return '♔';
     }
   };
 
@@ -116,16 +117,9 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture
             ],
           },
         ]}>
-          <LinearGradient
-            colors={[pieceColor, darkenColor(pieceColor)]}
-            style={styles.kingPiece}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.kingEmoji}>
-              {renderKingSymbol()}
-            </Text>
-          </LinearGradient>
+          <Text style={[styles.kingEmoji, { color: pieceColor }]}>
+            {renderKingSymbol()}
+          </Text>
         </Animated.View>
       </View>
     );
@@ -185,28 +179,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  kingPiece: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#888',
-  },
   kingEmoji: {
-    fontSize: 24,
+    fontSize: 28,
     textAlign: 'center',
-    lineHeight: 32,
-    color: '#FFFFFF',
+    lineHeight: 36,
+    fontWeight: 'bold',
     textShadowColor: '#000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
 });
 

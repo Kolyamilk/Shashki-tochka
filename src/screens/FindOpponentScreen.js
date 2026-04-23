@@ -10,8 +10,43 @@ import { useInvite } from '../context/InviteContext';
 import { useGameType } from '../context/GameTypeContext';
 import { generateRandomBotName, generateRandomLevel, generateRandomAvatar } from '../utils/botNames';
 
+// 30 интересных фактов про шашки
+const CHECKERS_FACTS = [
+  'Шашки — одна из древнейших игр в мире, им более 5000 лет!',
+  'В Древнем Египте играли в игру, похожую на шашки.',
+  'Первый чемпионат мира по шашкам прошёл в 1894 году.',
+  'Существует более 20 различных видов шашек по всему миру.',
+  'В русских шашках дамка может ходить на любое расстояние.',
+  'Самая длинная партия в шашки длилась более 7 часов!',
+  'В поддавки нужно отдать все свои фигуры — полная противоположность.',
+  'Шашки развивают логическое мышление и стратегическое планирование.',
+  'В некоторых странах шашки называют "дамками".',
+  'Компьютерная программа Chinook стала чемпионом мира в 1994 году.',
+  'В шашках возможно более 500 миллиардов различных позиций!',
+  'Шашки были популярны среди древних римлян и греков.',
+  'Дамка в шашках появилась в средневековой Европе.',
+  'В бразильских шашках играют на доске 8×8, но с другими правилами.',
+  'Шашки помогают улучшить концентрацию и память.',
+  'Первая книга о шашках была написана в 1547 году в Испании.',
+  'В международных шашках используется доска 10×10 клеток.',
+  'Шашки были включены в программу Всемирных интеллектуальных игр.',
+  'В России шашки особенно популярны с XVIII века.',
+  'Дамка может "съесть" несколько фигур за один ход.',
+  'Шашки тренируют способность просчитывать ходы наперёд.',
+  'В некоторых вариантах шашек можно ходить назад обычными фигурами.',
+  'Шашки — официальный вид спорта во многих странах.',
+  'Существуют шашки-64 и шашки-100 (по количеству клеток).',
+  'В шашках нет ничьей по соглашению — только по правилам.',
+  'Самый молодой чемпион мира по шашкам стал им в 18 лет.',
+  'Шашки развивают терпение и умение принимать решения.',
+  'В Турции популярен вариант шашек, где фигуры ходят вперёд и в стороны.',
+  'Шашки упоминаются в произведениях Пушкина и Толстого.',
+  'Профессиональные шашисты могут просчитать до 20 ходов вперёд!',
+];
+
 const FindOpponentScreen = ({ navigation }) => {
   const [status, setStatus] = useState('Поиск соперника...');
+  const [currentFact, setCurrentFact] = useState('');
   const { gameType } = useGameType();
   const waitingRef = useRef(null);
   const currentPlayerKey = useRef(null);
@@ -23,6 +58,12 @@ const FindOpponentScreen = ({ navigation }) => {
   const waitingUnsubscribeRef = useRef(null);
   const gamesUnsubscribeRef = useRef(null);
   const { resetInviteFlags } = useInvite();
+
+  // Выбираем случайный факт при монтировании
+  useEffect(() => {
+    const randomIndex = Math.floor(Math.random() * CHECKERS_FACTS.length);
+    setCurrentFact(CHECKERS_FACTS[randomIndex]);
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -220,6 +261,12 @@ const FindOpponentScreen = ({ navigation }) => {
     <View style={styles.container}>
       <Text style={styles.text}>{status}</Text>
       <ActivityIndicator size="large" color={colors.primary} />
+
+      {/* Интересный факт */}
+      <View style={styles.factContainer}>
+        <Text style={styles.factTitle}>💡 Интересный факт:</Text>
+        <Text style={styles.factText}>{currentFact}</Text>
+      </View>
     </View>
   );
 };
@@ -230,11 +277,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   text: {
     color: colors.textLight,
     fontSize: 18,
     marginBottom: 20,
+  },
+  factContainer: {
+    marginTop: 40,
+    backgroundColor: '#2c3e50',
+    borderRadius: 16,
+    padding: 20,
+    maxWidth: '90%',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  factTitle: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  factText: {
+    color: colors.textLight,
+    fontSize: 14,
+    lineHeight: 22,
+    fontStyle: 'italic',
   },
 });
 

@@ -46,15 +46,15 @@ const piecePresets = [
 
 // Пресеты для стиля дамки
 const kingStylePresets = [
-  { name: 'Корона', value: 'crown', preview: '👑', requiredLevel: 1 },
-  { name: 'Королева', value: 'rhombus', preview: '♛', requiredLevel: 1 },
-  { name: 'Звезда', value: 'star', preview: '⭐', requiredLevel: 2 },
-  { name: 'Сердце', value: 'heart', preview: '♥️', requiredLevel: 3 },
-  { name: 'Бриллиант', value: 'diamond', preview: '💎', requiredLevel: 4 },
-  { name: 'Огонь', value: 'fire', preview: '🔥', requiredLevel: 5 },
-  { name: 'Голубь', value: 'dove', preview: '🕊️', requiredLevel: 6 },
-  { name: 'Молния', value: 'square', preview: '■', requiredLevel: 7 },
-  { name: 'Какашки', value: 'poop', preview: '💩', requiredLevel: 8 },
+  { name: 'Корона', value: 'crown', preview: '♔', requiredLevel: 1 },
+  { name: 'Королева', value: 'queen', preview: '♛', requiredLevel: 1 },
+  { name: 'Звезда', value: 'star', preview: '★', requiredLevel: 2 },
+  { name: 'Сердце', value: 'heart', preview: '♡', requiredLevel: 3 },
+  { name: 'Череп', value: 'skull', preview: '☠', requiredLevel: 4 },
+  { name: 'Щит', value: 'shield', preview: '⛨', requiredLevel: 5 },
+  { name: 'Крест', value: 'cross', preview: '✚', requiredLevel: 6 },
+  { name: 'Цветок', value: 'flower', preview: '✿', requiredLevel: 7 },
+  { name: 'Пацифик', value: 'peace', preview: '☮', requiredLevel: 8 },
 ];
 
 // Модальное окно выбора цвета с блокировкой и значком замка
@@ -118,17 +118,6 @@ const ColorPickerModal = ({ visible, onClose, onSelect, currentColor, title, dis
 const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title, disabledStyles = [], userLevel = 1, pieceColor }) => {
   const tempPiece = { player: 1, king: true };
 
-  const darkenColor = (color) => {
-    if (color?.startsWith('#')) {
-      const r = parseInt(color.slice(1, 3), 16);
-      const g = parseInt(color.slice(3, 5), 16);
-      const b = parseInt(color.slice(5, 7), 16);
-      const darker = (c) => Math.max(0, c - 40);
-      return `#${darker(r).toString(16).padStart(2, '0')}${darker(g).toString(16).padStart(2, '0')}${darker(b).toString(16).padStart(2, '0')}`;
-    }
-    return color;
-  };
-
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalOverlay}>
@@ -156,14 +145,9 @@ const KingStyleModal = ({ visible, onClose, onSelect, currentStyle, title, disab
                   activeOpacity={0.7}
                 >
                   <View style={styles.previewKingWrapper}>
-                    <LinearGradient
-                      colors={[pieceColor, darkenColor(pieceColor)]}
-                      style={styles.previewKingCircle}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      <Text style={styles.previewKingSymbol}>{item.preview}</Text>
-                    </LinearGradient>
+                    <Text style={[styles.previewKingSymbol, { color: pieceColor }]}>
+                      {item.preview}
+                    </Text>
                   </View>
                   <Text style={styles.styleName}>{item.name}</Text>
                   {cannotSelect && (
@@ -806,31 +790,41 @@ const styles = StyleSheet.create({
   },
   disabledStyleOverlay: {
     position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
-    justifyContent: 'center',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  lockIcon: {
+    fontSize: 12,
+    color: '#fff',
+  },
+  levelRequirement: {
+    fontSize: 8,
+    color: '#FFD700',
+    fontWeight: 'bold',
+    marginLeft: 2,
   },
   previewKingWrapper: {
     marginBottom: 4,
-  },
-  previewKingCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#888',
+    width: 50,
+    height: 50,
   },
   previewKingSymbol: {
-    fontSize: 28,
-    color: '#FFFFFF',
+    fontSize: 32,
+    textAlign: 'center',
+    lineHeight: 50,
+    fontWeight: 'bold',
     textShadowColor: '#000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   stylePreview: {
     fontSize: 30,

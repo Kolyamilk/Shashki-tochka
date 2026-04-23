@@ -545,7 +545,8 @@ const BotGameScreen = ({ route, navigation }) => {
     setVictoryModalVisible(false);
     // Сбрасываем флаги приглашений после выхода из игры
     resetInviteFlags();
-    navigation.goBack();
+    // Перенаправляем на главный экран
+    navigation.navigate('Menu');
   };
 
   let captureMap = {};
