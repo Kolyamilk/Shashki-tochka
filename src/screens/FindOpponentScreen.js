@@ -8,7 +8,7 @@ import { colors } from '../styles/globalStyles';
 import { initialBoard } from '../utils/checkersLogic';
 import { useInvite } from '../context/InviteContext';
 import { useGameType } from '../context/GameTypeContext';
-import { generateRandomBotName, generateRandomLevel } from '../utils/botNames';
+import { generateRandomBotName, generateRandomLevel, generateRandomAvatar } from '../utils/botNames';
 
 const FindOpponentScreen = ({ navigation }) => {
   const [status, setStatus] = useState('Поиск соперника...');
@@ -180,21 +180,23 @@ const FindOpponentScreen = ({ navigation }) => {
           }
           gameCreatedRef.current = true;
 
-          // Генерируем случайное имя и уровень для бота
+          // Генерируем случайное имя, уровень и аватарку для бота
           const botName = generateRandomBotName();
           const botLevel = generateRandomLevel();
+          const botAvatar = generateRandomAvatar();
 
-          console.log('🤖 Создаём игру с ботом:', { botName, botLevel });
+          console.log('🤖 Создаём игру с ботом:', { botName, botLevel, botAvatar });
 
-          // Переходим на экран игры с ботом, передавая имя и уровень
+          // Переходим на экран игры с ботом, передавая имя, уровень и аватарку
           navigation.replace('BotGame', {
             difficulty: 'grandmaster',
             botName: botName,
             botLevel: botLevel,
+            botAvatar: botAvatar,
             isFakeOpponent: true
           });
         }
-      }, 15000);
+      }, 25000);
 
       return () => {
         isMounted.current = false;

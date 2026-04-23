@@ -7,7 +7,20 @@ import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 
-const AVATARS = ['😀', '😎', '🤓', '😇', '🥳', '🤠', '👻', '🤖', '👽', '🦄', '🐶', '🐱', '🐼', '🦊', '🐯', '🦁', '🐸', '🐵'];
+const AVATARS = [
+  '😀', '😎', '🤓', '😇', '🥳', '🤠', '🤡', '👻', '🤖', '👽',
+  '🦄', '🐶', '🐱', '🐼', '🦊', '🐯', '🦁', '🐸', '🐵', '🐨',
+  '🐷', '🐮', '🐔', '🐧', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴',
+  '🦓', '🦒', '🦘', '🦙', '🦥', '🦦', '🦨', '🦡', '🐘', '🦏',
+  '🐉', '🦖', '🦕', '🐢', '🐊', '🐍', '🦎', '🐙', '🦑', '🦞',
+  '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🦈', '🦭', '🐋', '🦛',
+  '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸',
+  '🥊', '🥋', '🎯', '🎮', '🎲', '🎰', '🎪', '🎭', '🎨', '🎬',
+  '🎸', '🎹', '🎺', '🎻', '🥁', '🎤', '🎧', '🎼', '🎵', '🎶',
+  '👑', '💎', '💍', '🔥', '⚡', '⭐', '🌟', '✨', '💫', '🌈',
+  '🍕', '🍔', '🍟', '🌭', '🍿', '🧁', '🍰', '🎂', '🍩', '🍪',
+  '🚀', '🛸', '🛰️', '🌍', '🌎', '🌏', '🌙', '☀️', '🪐', '💥'
+];
 
 const ProfileScreen = ({ navigation }) => {
   const { userId, logout } = useAuth();
@@ -218,25 +231,25 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Редактировать профиль</Text>
 
-            <Text style={styles.label}>Аватар</Text>
+            <Text style={styles.label}>Выберите аватар</Text>
             <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.avatarScroll}
-              contentContainerStyle={styles.avatarScrollContent}
+              style={styles.avatarGridScroll}
+              showsVerticalScrollIndicator={false}
             >
-              {AVATARS.map((avatar) => (
-                <TouchableOpacity
-                  key={avatar}
-                  style={[
-                    styles.avatarOption,
-                    editAvatar === avatar && styles.avatarOptionSelected
-                  ]}
-                  onPress={() => setEditAvatar(avatar)}
-                >
-                  <Text style={styles.avatarOptionText}>{avatar}</Text>
-                </TouchableOpacity>
-              ))}
+              <View style={styles.avatarGrid}>
+                {AVATARS.map((avatar) => (
+                  <TouchableOpacity
+                    key={avatar}
+                    style={[
+                      styles.avatarOption,
+                      editAvatar === avatar && styles.avatarOptionSelected
+                    ]}
+                    onPress={() => setEditAvatar(avatar)}
+                  >
+                    <Text style={styles.avatarOptionText}>{avatar}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </ScrollView>
 
             <Text style={styles.label}>Имя игрока</Text>
@@ -679,29 +692,34 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 10,
   },
-  avatarScroll: {
+  avatarGridScroll: {
+    maxHeight: 280,
     marginBottom: 10,
   },
-  avatarScrollContent: {
+  avatarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     paddingVertical: 8,
   },
   avatarOption: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: '18%',
+    aspectRatio: 1,
+    borderRadius: 12,
     backgroundColor: 'rgba(78, 205, 196, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginBottom: 8,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   avatarOptionSelected: {
     borderColor: '#4ECDC4',
     backgroundColor: 'rgba(78, 205, 196, 0.3)',
+    transform: [{ scale: 1.05 }],
   },
   avatarOptionText: {
-    fontSize: 32,
+    fontSize: 28,
   },
   input: {
     backgroundColor: '#1a2a3a',

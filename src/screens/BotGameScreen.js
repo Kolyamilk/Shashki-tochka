@@ -26,12 +26,12 @@ import { get } from 'firebase/database';
 import { EXP_REWARDS, getLevelFromExp } from '../utils/levelSystem';
 
 const BotGameScreen = ({ route, navigation }) => {
-  const { difficulty, botName, botLevel, isFakeOpponent } = route.params;
+  const { difficulty, botName, botLevel, botAvatar, isFakeOpponent } = route.params;
   const { myPieceColor, opponentPieceColor } = useSettings();
   const { userId } = useAuth();
   const { gameType } = useGameType();
   const { resetInviteFlags } = useInvite();
-  
+
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
   const [selectedCell, setSelectedCell] = useState(null);
@@ -49,6 +49,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const [myAvatar, setMyAvatar] = useState('😀');
   const [opponentName, setOpponentName] = useState(botName || 'Бот');
   const [opponentLevel, setOpponentLevel] = useState(botLevel || 1);
+  const [opponentAvatar, setOpponentAvatar] = useState(botAvatar || '🤖');
 
   const isAnimatingRef = useRef(false);
   const isBotThinkingRef = useRef(false);
@@ -537,7 +538,7 @@ const BotGameScreen = ({ route, navigation }) => {
 
       {/* Инфо о противнике с индикатором хода */}
       <View style={styles.opponentInfo}>
-        <Text style={styles.opponentAvatar}>{isFakeOpponent ? '👤' : '🤖'}</Text>
+        <Text style={styles.opponentAvatar}>{opponentAvatar}</Text>
         <View style={styles.opponentDetails}>
           <Text style={styles.opponentName}>{opponentName}</Text>
           {isFakeOpponent && (
