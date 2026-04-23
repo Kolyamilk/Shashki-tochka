@@ -67,7 +67,7 @@ const applyMoveToBoard = (board, move) => {
 };
 
 // Продвинутая оценочная функция
-const evaluateBoard = (board) => {
+const evaluateBoard = (board, isGiveaway = false) => {
   let score = 0;
   let player1Pieces = 0, player2Pieces = 0;
   let player1Kings = 0, player2Kings = 0;
@@ -83,83 +83,122 @@ const evaluateBoard = (board) => {
           else player2Kings++;
         }
 
-        // Базовая ценность фигуры (дамка ценнее)
-        let value = piece.king ? 5 : 1;
+        // В режиме поддавков логика обратная
+        if (isGiveaway) {
+          // Чем меньше фигур у игрока, тем лучше
+          let value = piece.king ? -5 : -1;
 
-        // Бонус за положение на доске
-        if (!piece.king) {
-          value += positionalWeights[r][c] * 0.15;
-        }
+          // В поддавках выгодно быть уязвимым (чтобы тебя съели)
+          let vulnerabilityBonus = 0;
+          const directions = [[-1,-1], [-1,1], [1,-1], [1,1]];
 
-        // Бонус за продвижение вперёд
-        if (!piece.king) {
-          const forwardProgress = piece.player === 1 ? r : 7 - r;
-          value += forwardProgress * 0.1;
-        }
-
-        // Бонус за близость к превращению в дамку
-        if (!piece.king) {
-          const distanceToKing = piece.player === 1 ? (7 - r) : r;
-          if (distanceToKing <= 2) {
-            value += (3 - distanceToKing) * 0.4;
-          }
-        }
-
-        // Бонус за защищённость и атакующую позицию
-        let protectionBonus = 0;
-        let attackBonus = 0;
-        let vulnerabilityPenalty = 0;
-        const directions = [[-1,-1], [-1,1], [1,-1], [1,1]];
-
-        for (let [dr, dc] of directions) {
-          const nr = r + dr;
-          const nc = c + dc;
-          if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
-            const neighbor = board[nr][nc];
-            if (neighbor) {
-              if (neighbor.player === piece.player) {
-                protectionBonus += 0.2;
-              } else {
-                // Можем ли атаковать
-                const jumpR = r + dr * 2;
-                const jumpC = c + dc * 2;
-                if (jumpR >= 0 && jumpR < BOARD_SIZE && jumpC >= 0 && jumpC < BOARD_SIZE && !board[jumpR][jumpC]) {
-                  attackBonus += 0.3;
-                }
+          for (let [dr, dc] of directions) {
+            const attackerR = r - dr;
+            const attackerC = c - dc;
+            const landR = r + dr;
+            const landC = c + dc;
+            if (attackerR >= 0 && attackerR < BOARD_SIZE && attackerC >= 0 && attackerC < BOARD_SIZE &&
+                landR >= 0 && landR < BOARD_SIZE && landC >= 0 && landC < BOARD_SIZE) {
+              const attacker = board[attackerR][attackerC];
+              const landing = board[landR][landC];
+              if (attacker && attacker.player !== piece.player && !landing) {
+                vulnerabilityBonus += 0.5; // Бонус за уязвимость
               }
             }
           }
 
-          // Проверка уязвимости
-          const attackerR = r - dr;
-          const attackerC = c - dc;
-          const landR = r + dr;
-          const landC = c + dc;
-          if (attackerR >= 0 && attackerR < BOARD_SIZE && attackerC >= 0 && attackerC < BOARD_SIZE &&
-              landR >= 0 && landR < BOARD_SIZE && landC >= 0 && landC < BOARD_SIZE) {
-            const attacker = board[attackerR][attackerC];
-            const landing = board[landR][landC];
-            if (attacker && attacker.player !== piece.player && !landing) {
-              vulnerabilityPenalty += 0.25;
+          value += vulnerabilityBonus;
+
+          if (piece.player === 2) score += value;
+          else score -= value;
+        } else {
+          // Обычная логика для русских шашек
+          let value = piece.king ? 5 : 1;
+
+          // Бонус за положение на доске
+          if (!piece.king) {
+            value += positionalWeights[r][c] * 0.15;
+          }
+
+          // Бонус за продвижение вперёд
+          if (!piece.king) {
+            const forwardProgress = piece.player === 1 ? r : 7 - r;
+            value += forwardProgress * 0.1;
+          }
+
+          // Бонус за близость к превращению в дамку
+          if (!piece.king) {
+            const distanceToKing = piece.player === 1 ? (7 - r) : r;
+            if (distanceToKing <= 2) {
+              value += (3 - distanceToKing) * 0.4;
             }
           }
+
+          // Бонус за защищённость и атакующую позицию
+          let protectionBonus = 0;
+          let attackBonus = 0;
+          let vulnerabilityPenalty = 0;
+          const directions = [[-1,-1], [-1,1], [1,-1], [1,1]];
+
+          for (let [dr, dc] of directions) {
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
+              const neighbor = board[nr][nc];
+              if (neighbor) {
+                if (neighbor.player === piece.player) {
+                  protectionBonus += 0.2;
+                } else {
+                  // Можем ли атаковать
+                  const jumpR = r + dr * 2;
+                  const jumpC = c + dc * 2;
+                  if (jumpR >= 0 && jumpR < BOARD_SIZE && jumpC >= 0 && jumpC < BOARD_SIZE && !board[jumpR][jumpC]) {
+                    attackBonus += 0.3;
+                  }
+                }
+              }
+            }
+
+            // Проверка уязвимости
+            const attackerR = r - dr;
+            const attackerC = c - dc;
+            const landR = r + dr;
+            const landC = c + dc;
+            if (attackerR >= 0 && attackerR < BOARD_SIZE && attackerC >= 0 && attackerC < BOARD_SIZE &&
+                landR >= 0 && landR < BOARD_SIZE && landC >= 0 && landC < BOARD_SIZE) {
+              const attacker = board[attackerR][attackerC];
+              const landing = board[landR][landC];
+              if (attacker && attacker.player !== piece.player && !landing) {
+                vulnerabilityPenalty += 0.25;
+              }
+            }
+          }
+
+          value += protectionBonus + attackBonus - vulnerabilityPenalty;
+
+          if (piece.player === 2) score += value;
+          else score -= value;
         }
-
-        value += protectionBonus + attackBonus - vulnerabilityPenalty;
-
-        if (piece.player === 2) score += value;
-        else score -= value;
       }
     }
   }
 
-  // Бонус за материальное преимущество
-  const pieceDiff = player2Pieces - player1Pieces;
-  score += pieceDiff * 0.6;
+  // Материальное преимущество
+  if (isGiveaway) {
+    // В поддавках: чем меньше фигур, тем лучше
+    const pieceDiff = player2Pieces - player1Pieces;
+    score -= pieceDiff * 2; // Инвертируем
 
-  // Бонус за преимущество в дамках
-  const kingDiff = player2Kings - player1Kings;
-  score += kingDiff * 2;
+    const kingDiff = player2Kings - player1Kings;
+    score -= kingDiff * 3; // Инвертируем
+  } else {
+    // В обычных шашках: чем больше фигур, тем лучше
+    const pieceDiff = player2Pieces - player1Pieces;
+    score += pieceDiff * 0.6;
+
+    const kingDiff = player2Kings - player1Kings;
+    score += kingDiff * 2;
+  }
 
   return score;
 };
@@ -167,8 +206,7 @@ const evaluateBoard = (board) => {
 // Минимакс с альфа-бета отсечением и рандомизацией
 const minimax = (board, depth, alpha, beta, maximizingPlayer, player, isGiveaway = false, moveHistory = []) => {
   if (depth === 0) {
-    let score = evaluateBoard(board);
-    if (isGiveaway) score = -score; // Инвертируем для поддавков
+    const score = evaluateBoard(board, isGiveaway);
     return { score, move: null };
   }
 
@@ -235,8 +273,7 @@ export const getBestMove = (board, player, difficulty, gameType = 'russian') => 
       let bestMove = null;
       for (const move of moves) {
         const newBoard = applyMoveToBoard(board, move);
-        let score = evaluateBoard(newBoard);
-        if (isGiveaway) score = -score; // Инвертируем для поддавков
+        const score = evaluateBoard(newBoard, isGiveaway);
 
         if (isGiveaway ? score < bestScore : score > bestScore) {
           bestScore = score;

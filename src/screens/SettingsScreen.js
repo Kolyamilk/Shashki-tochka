@@ -47,7 +47,7 @@ const piecePresets = [
 // Пресеты для стиля дамки
 const kingStylePresets = [
   { name: 'Корона', value: 'crown', preview: '♔', requiredLevel: 1 },
-  { name: 'Королева', value: 'queen', preview: '♛', requiredLevel: 1 },
+  { name: 'Королева', value: 'queen', preview: '♕', requiredLevel: 1 },
   { name: 'Звезда', value: 'star', preview: '★', requiredLevel: 2 },
   { name: 'Сердце', value: 'heart', preview: '♡', requiredLevel: 3 },
   { name: 'Череп', value: 'skull', preview: '☠', requiredLevel: 4 },
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#1a2a3a',
+    backgroundColor: '#2c3e50',
     borderRadius: 24,
     padding: 24,
     width: '90%',
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     margin: 6,
-    backgroundColor: '#1a2a3a',
+    backgroundColor: '#34495e',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -818,13 +818,13 @@ const styles = StyleSheet.create({
     height: 50,
   },
   previewKingSymbol: {
-    fontSize: 32,
+    fontSize: 36,
     textAlign: 'center',
     lineHeight: 50,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textShadowColor: '#000',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 6,
   },
   stylePreview: {
     fontSize: 30,

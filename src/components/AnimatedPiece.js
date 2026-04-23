@@ -55,7 +55,7 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture
   const renderKingSymbol = () => {
     switch (kingStyle) {
       case 'crown': return '♔';
-      case 'queen': return '♛';
+      case 'queen': return '♕';
       case 'star': return '★';
       case 'heart': return '♡';
       case 'skull': return '☠';
@@ -178,15 +178,16 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 2,
   },
   kingEmoji: {
-    fontSize: 28,
+    fontSize: 32,
     textAlign: 'center',
     lineHeight: 36,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textShadowColor: '#000',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 6,
   },
 });
 

@@ -135,10 +135,10 @@ export const DailyTasksProvider = ({ children }) => {
       );
 
       if (newlyCompleted) {
-        // Используем setTimeout для отложенного обновления состояния вне рендера
-        setTimeout(() => {
+        // Используем Promise для отложенного обновления состояния вне рендера
+        Promise.resolve().then(() => {
           setPendingReward({ task: newlyCompleted });
-        }, 0);
+        });
       }
 
       // Сохраняем в Firebase

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Alert, BackHandler } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Alert, BackHandler, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, push, onValue, off, set, remove, query, orderByChild, equalTo, get, runTransaction } from 'firebase/database';
@@ -47,6 +47,7 @@ const CHECKERS_FACTS = [
 const FindOpponentScreen = ({ navigation }) => {
   const [status, setStatus] = useState('Поиск соперника...');
   const [currentFact, setCurrentFact] = useState('');
+  const [factRated, setFactRated] = useState(false);
   const { gameType } = useGameType();
   const waitingRef = useRef(null);
   const currentPlayerKey = useRef(null);
@@ -63,7 +64,14 @@ const FindOpponentScreen = ({ navigation }) => {
   useEffect(() => {
     const randomIndex = Math.floor(Math.random() * CHECKERS_FACTS.length);
     setCurrentFact(CHECKERS_FACTS[randomIndex]);
+    setFactRated(false);
   }, []);
+
+  const handleFactRating = (isLike) => {
+    setFactRated(true);
+    console.log(`📊 Факт оценен: ${isLike ? '👍' : '👎'}`);
+    // Здесь можно добавить отправку оценки в Firebase для аналитики
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -266,6 +274,33 @@ const FindOpponentScreen = ({ navigation }) => {
       <View style={styles.factContainer}>
         <Text style={styles.factTitle}>💡 Интересный факт:</Text>
         <Text style={styles.factText}>{currentFact}</Text>
+
+        {/* Кнопки оценки */}
+        {!factRated ? (
+          <View style={styles.ratingContainer}>
+            <Text style={styles.ratingQuestion}>Понравился факт?</Text>
+            <View style={styles.ratingButtons}>
+              <TouchableOpacity
+                style={styles.ratingButton}
+                onPress={() => handleFactRating(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.ratingButtonText}>👍</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.ratingButton}
+                onPress={() => handleFactRating(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.ratingButtonText}>👎</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.thanksContainer}>
+            <Text style={styles.thanksText}>✨ Спасибо за оценку!</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -304,6 +339,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     fontStyle: 'italic',
+  },
+  ratingContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  ratingQuestion: {
+    color: '#aaa',
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  ratingButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  ratingButton: {
+    backgroundColor: '#34495e',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minWidth: 60,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ratingButtonText: {
+    fontSize: 24,
+  },
+  thanksContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  thanksText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
