@@ -4,7 +4,9 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(gh auth *)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "WebFetch(domain:expo.dev)",
+      "Bash(npx expo-cli *)"
     ]
   }
 }

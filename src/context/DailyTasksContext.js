@@ -135,8 +135,10 @@ export const DailyTasksProvider = ({ children }) => {
       );
 
       if (newlyCompleted) {
-        // Отложенная обработка награды через useEffect
-        setPendingReward({ task: newlyCompleted });
+        // Используем setTimeout для отложенного обновления состояния вне рендера
+        setTimeout(() => {
+          setPendingReward({ task: newlyCompleted });
+        }, 0);
       }
 
       // Сохраняем в Firebase
