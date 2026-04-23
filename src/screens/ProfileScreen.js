@@ -194,10 +194,10 @@ const ProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         <View style={styles.statsContainer}>
+          <Text style={styles.statsTitle}>📊 Статистика онлайн игр</Text>
           <Text style={styles.statsText}>Сыграно игр: {totalGames}</Text>
           <Text style={styles.statsText}>Побед: {wins}</Text>
           <Text style={styles.statsText}>Процент побед: {winRate}%</Text>
-          <Text style={styles.statsText}>Всего опыта: {levelInfo.totalExp}</Text>
         </View>
       </View>
 
@@ -532,6 +532,13 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     width: '100%',
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#4ECDC4',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   statsText: {
     fontSize: 18,

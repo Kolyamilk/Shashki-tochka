@@ -164,8 +164,8 @@ const evaluateBoard = (board) => {
   return score;
 };
 
-// Минимакс с альфа-бета отсечением
-const minimax = (board, depth, alpha, beta, maximizingPlayer, player, isGiveaway = false) => {
+// Минимакс с альфа-бета отсечением и рандомизацией
+const minimax = (board, depth, alpha, beta, maximizingPlayer, player, isGiveaway = false, moveHistory = []) => {
   if (depth === 0) {
     let score = evaluateBoard(board);
     if (isGiveaway) score = -score; // Инвертируем для поддавков
@@ -177,33 +177,43 @@ const minimax = (board, depth, alpha, beta, maximizingPlayer, player, isGiveaway
     return { score: maximizingPlayer ? -1000 : 1000, move: null };
   }
 
+  // Добавляем небольшую рандомизацию в порядок рассмотрения ходов
+  const shuffledMoves = [...moves].sort(() => Math.random() - 0.5);
+
   if (maximizingPlayer) {
     let bestScore = -Infinity;
-    let bestMove = null;
-    for (const move of moves) {
+    let bestMoves = []; // Храним все лучшие ходы с одинаковой оценкой
+    for (const move of shuffledMoves) {
       const newBoard = applyMoveToBoard(board, move);
-      const result = minimax(newBoard, depth - 1, alpha, beta, false, player === 1 ? 2 : 1, isGiveaway);
+      const result = minimax(newBoard, depth - 1, alpha, beta, false, player === 1 ? 2 : 1, isGiveaway, moveHistory);
       if (result.score > bestScore) {
         bestScore = result.score;
-        bestMove = move;
+        bestMoves = [move];
+      } else if (result.score === bestScore) {
+        bestMoves.push(move);
       }
       alpha = Math.max(alpha, bestScore);
       if (beta <= alpha) break;
     }
+    // Выбираем случайный ход из лучших
+    const bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
     return { score: bestScore, move: bestMove };
   } else {
     let bestScore = Infinity;
-    let bestMove = null;
-    for (const move of moves) {
+    let bestMoves = [];
+    for (const move of shuffledMoves) {
       const newBoard = applyMoveToBoard(board, move);
-      const result = minimax(newBoard, depth - 1, alpha, beta, true, player === 1 ? 2 : 1, isGiveaway);
+      const result = minimax(newBoard, depth - 1, alpha, beta, true, player === 1 ? 2 : 1, isGiveaway, moveHistory);
       if (result.score < bestScore) {
         bestScore = result.score;
-        bestMove = move;
+        bestMoves = [move];
+      } else if (result.score === bestScore) {
+        bestMoves.push(move);
       }
       beta = Math.min(beta, bestScore);
       if (beta <= alpha) break;
     }
+    const bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
     return { score: bestScore, move: bestMove };
   }
 };
@@ -237,12 +247,12 @@ export const getBestMove = (board, player, difficulty, gameType = 'russian') => 
     }
 
     case 'hard': {
-      const result = minimax(board, 4, -Infinity, Infinity, true, player, isGiveaway);
+      const result = minimax(board, 4, -Infinity, Infinity, true, player, isGiveaway, []);
       return result.move;
     }
 
     case 'grandmaster': {
-      const result = minimax(board, 5, -Infinity, Infinity, true, player, isGiveaway);
+      const result = minimax(board, 7, -Infinity, Infinity, true, player, isGiveaway, []);
       return result.move;
     }
 

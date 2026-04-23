@@ -276,6 +276,29 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
       if (!isInitialized.current) isInitialized.current = true;
 
+      // Проверяем, сдался ли противник
+      if (data.status === 'finished' && data.surrendered && !isGameEnding.current) {
+        console.log('🚪 Противник сдался');
+        isGameEnding.current = true;
+
+        const isWin = data.winner === playerKey;
+        let expGained = 0;
+        let oldExp = 0;
+
+        if (isWin) {
+          // Я победил - противник сдался
+          const myStatsRef = ref(db, `users/${playerKey}/stats`);
+          const myStatsSnap = await get(myStatsRef);
+          const myStats = myStatsSnap.val() || { exp: 0 };
+          oldExp = myStats.exp || 0;
+          expGained = EXP_REWARDS.WIN_ONLINE;
+        }
+
+        setVictoryData({ isWin, expGained, oldExp, opponentLeft: true });
+        setVictoryModalVisible(true);
+        return;
+      }
+
       if (!data.board || !Array.isArray(data.board)) {
         console.log('⏳ Доска ещё не создана или некорректна, жду...');
         return;
@@ -458,45 +481,91 @@ const OnlineGameScreen = ({ route, navigation }) => {
           text: 'Сдаться',
           style: 'destructive',
           onPress: async () => {
+            if (!gameData || !gameData.players) {
+              console.error('❌ gameData не загружен');
+              navigation.replace('Menu');
+              return;
+            }
+
             isGameEnding.current = true;
-            const opponentId = Object.keys(gameData?.players || {}).find(p => p !== playerKey);
+            const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+
             if (opponentId) {
               try {
+                // Обновляем статистику противника (победа)
                 const opponentRef = ref(db, `users/${opponentId}/stats`);
                 const opponentSnap = await get(opponentRef);
                 const opponentStats = opponentSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
                 const opponentOldExp = opponentStats.exp || 0;
+                const opponentExpGain = EXP_REWARDS.WIN_ONLINE;
+
                 await update(opponentRef, {
                   totalGames: opponentStats.totalGames + 1,
                   wins: opponentStats.wins + 1,
-                  exp: opponentOldExp + 150,
+                  exp: opponentOldExp + opponentExpGain,
                 });
+
+                // Добавляем запись в историю противника
                 const opponentUserSnap = await get(ref(db, `users/${opponentId}`));
                 const opponentUserData = opponentUserSnap.val() || {};
                 const opponentHistory = opponentUserData.expHistory || [];
                 const opponentEntry = {
                   timestamp: Date.now(),
-                  gameType: 'Онлайн игра',
+                  gameType: gameData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
                   opponent: `${myName || 'Игрок'} (${myLevel} ур.)`,
                   result: 'opponent_left',
-                  expGained: 150,
+                  expGained: opponentExpGain,
                 };
                 opponentHistory.unshift(opponentEntry);
                 if (opponentHistory.length > 50) opponentHistory.pop();
                 await update(ref(db, `users/${opponentId}`), { expHistory: opponentHistory });
 
+                // Обновляем статистику игрока (поражение)
                 const playerRef = ref(db, `users/${playerKey}/stats`);
                 const playerSnap = await get(playerRef);
                 const playerStats = playerSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
-                await update(playerRef, { totalGames: playerStats.totalGames + 1 });
+                const playerOldExp = playerStats.exp || 0;
+                const playerExpGain = EXP_REWARDS.LOSE_ONLINE;
+
+                await update(playerRef, {
+                  totalGames: playerStats.totalGames + 1,
+                  exp: playerOldExp + playerExpGain,
+                });
+
+                // Добавляем запись в историю игрока
+                const playerUserSnap = await get(ref(db, `users/${playerKey}`));
+                const playerUserData = playerUserSnap.val() || {};
+                const playerHistory = playerUserData.expHistory || [];
+                const playerEntry = {
+                  timestamp: Date.now(),
+                  gameType: gameData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
+                  opponent: `${opponentName || 'Соперник'} (${opponentLevel} ур.)`,
+                  result: 'lose',
+                  expGained: playerExpGain,
+                };
+                playerHistory.unshift(playerEntry);
+                if (playerHistory.length > 50) playerHistory.pop();
+                await update(ref(db, `users/${playerKey}`), { expHistory: playerHistory });
+
+                // Помечаем игру как завершенную с информацией о сдаче
+                await update(ref(db, `games_checkers/${gameId}`), {
+                  status: 'finished',
+                  winner: opponentId,
+                  surrendered: playerKey,
+                  finishedAt: Date.now(),
+                });
+
               } catch (err) {
                 console.error('Ошибка обновления статистики:', err);
               }
             }
+
+            // Удаляем игру
             if (!isCleanupDone.current) {
               isCleanupDone.current = true;
               await remove(ref(db, `games_checkers/${gameId}`));
             }
+
             navigation.replace('Menu');
           },
         },
@@ -532,15 +601,17 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Режим игры вверху */}
       <View style={styles.header}>
         <View style={styles.gameTypeIndicator}>
           <Text style={styles.gameTypeText}>{gameTypeName}</Text>
         </View>
       </View>
 
+      {/* Инфо о противнике с индикатором хода */}
       <View style={styles.opponentInfo}>
         <Text style={styles.opponentAvatar}>{opponentAvatar || '😎'}</Text>
-        <View style={styles.playerDetails}>
+        <View style={styles.opponentDetails}>
           <Text style={styles.opponentName}>{opponentName || 'Соперник'}</Text>
           <Text style={[styles.levelBadge, { color: getLevelColor(opponentLevel) }]}>
             ⭐ Ур. {opponentLevel}
@@ -553,6 +624,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         )}
       </View>
 
+      {/* Съеденные шашки противника (сверху) - противник съел мои шашки */}
       <View style={styles.capturedRow}>
         {Array.from({ length: opponentCaptured }).map((_, index) => (
           <View
@@ -576,6 +648,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         onAnimationFinish={onAnimationFinish}
       />
 
+      {/* Съеденные шашки игрока (снизу) - я съел шашки противника */}
       <View style={styles.capturedRow}>
         {Array.from({ length: myCaptured }).map((_, index) => (
           <View
@@ -603,6 +676,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
         )}
       </View>
 
+      {/* Кнопка сдаться */}
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
@@ -670,19 +744,6 @@ const styles = StyleSheet.create({
   opponentInfo: {
     position: 'absolute',
     top: 110,
-    left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2c3e50',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 25,
-    zIndex: 10,
-  },
-  playerInfo: {
-    position: 'absolute',
-    bottom: 90,
-    left: 20,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2c3e50',
@@ -692,7 +753,22 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   opponentAvatar: { fontSize: 24, marginRight: 8 },
-  opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600' },
+  opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
+  opponentDetails: {
+    flexDirection: 'column',
+    marginRight: 10,
+  },
+  playerInfo: {
+    position: 'absolute',
+    bottom: 90,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c3e50',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 25,
+    zIndex: 10,
+  },
   playerAvatar: { fontSize: 24, marginRight: 8 },
   playerName: { fontSize: 14, color: colors.textLight, fontWeight: '600' },
   playerDetails: {

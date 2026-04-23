@@ -89,6 +89,8 @@ function AppNavigator() {
     const invitationsRef = ref(db, 'invitations');
     const handler = async (snapshot) => {
       const data = snapshot.val();
+      console.log('📨 Invitations handler triggered:', { hasData: !!data, userId, dataKeys: data ? Object.keys(data) : [] });
+
       if (!data) {
         if (currentAlertVisible.current && currentAlertInvId.current && !wasAcceptedRef.current) {
           Alert.alert('Приглашение отменено', 'Игрок отменил приглашение.', [{ text: 'OK' }]);
@@ -99,11 +101,27 @@ function AppNavigator() {
         return;
       }
 
+      console.log('📨 Processing invitations:', Object.keys(data).length);
+
       for (const [invId, invData] of Object.entries(data)) {
+        console.log('📨 Checking invitation:', {
+          invId,
+          from: invData.from,
+          to: invData.to,
+          status: invData.status,
+          myUserId: userId,
+          isForMe: invData.to === userId,
+          isPending: invData.status === 'pending',
+          alertVisible: currentAlertVisible.current,
+          alreadyShown: hasShownAlertFor.current.has(invId)
+        });
 
         // 1. Входящее приглашение (получатель)
         if (invData.to === userId && invData.status === 'pending') {
+          console.log('📨 Incoming invitation detected for me');
+
           if (!currentAlertVisible.current && !hasShownAlertFor.current.has(invId)) {
+            console.log('✅ Showing invitation alert:', invId);
             hasShownAlertFor.current.add(invId);
             currentAlertVisible.current = true;
             currentAlertInvId.current = invId;
@@ -201,6 +219,7 @@ function AppNavigator() {
   }, [userId, isNavigationReady, navigateToGame]);
 
   const resetInviteFlags = useCallback(() => {
+    console.log('🔄 Сброс флагов приглашений');
     // Очищаем все флаги
     hasShownAlertFor.current.clear();
     processedAccepted.current.clear();
@@ -210,10 +229,12 @@ function AppNavigator() {
 
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     if (unsubscribeInvitations.current) {
+      console.log('🔄 Отписываемся от старой подписки');
       unsubscribeInvitations.current();
       unsubscribeInvitations.current = null;
     }
     resetTimerRef.current = setTimeout(() => {
+      console.log('🔄 Пересоздаём подписку на приглашения');
       createInvitationsSubscription();
       resetTimerRef.current = null;
     }, 1000);

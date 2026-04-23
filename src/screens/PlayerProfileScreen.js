@@ -277,6 +277,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       const mySnapshot = await get(myUserRef);
       const myData = mySnapshot.exists() ? mySnapshot.val() : {};
 
+      // Удаляем старые приглашения между этими игроками
       const invitationsRef = ref(db, 'invitations');
       const snapshot = await get(invitationsRef);
       if (snapshot.exists()) {
@@ -300,6 +301,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
         createdAt: Date.now(),
         gameId: `private_${userId}_${playerId}_${Date.now()}`,
       };
+
       await set(newInviteRef, inviteData);
 
       await sendPushNotification(
@@ -313,7 +315,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
 
       navigation.setParams({ sendInvite: false, selectedGameType: null });
     } catch (err) {
-      console.error(err);
+      console.error('❌ Error sending invite:', err);
       Alert.alert('Ошибка', 'Не удалось отправить приглашение');
     }
   };

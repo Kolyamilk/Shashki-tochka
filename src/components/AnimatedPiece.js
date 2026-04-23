@@ -57,6 +57,8 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
       case 'dove': return '🕊️';
       case 'heart': return '♥️';
       case 'poop': return '💩';
+      case 'square': return '■';
+      case 'rhombus': return '♛';
       default: return '👑';
     }
   };
@@ -100,9 +102,16 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
             ],
           },
         ]}>
-          <Text style={[styles.kingEmoji, { color: kingCrownColor }]}>
-            {renderKingSymbol()}
-          </Text>
+          <LinearGradient
+            colors={[pieceColor, darkenColor(pieceColor)]}
+            style={styles.kingPiece}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.kingEmoji}>
+              {renderKingSymbol()}
+            </Text>
+          </LinearGradient>
         </Animated.View>
       </View>
     );
@@ -133,21 +142,21 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
 const styles = StyleSheet.create({
   absoluteContainer: {
     position: 'absolute',
-    width: 45,
-    height: 45,
+    width: 38,
+    height: 38,
     zIndex: 1000,
     elevation: 1000,
   },
   container: {
-    width: 45,
-    height: 45,
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
   },
   piece: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
@@ -157,17 +166,33 @@ const styles = StyleSheet.create({
     borderColor: '#888',
   },
   kingContainer: {
-    width: 45,
-    height: 45,
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  kingPiece: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#888',
+  },
   kingEmoji: {
-    fontSize: 32,
+    fontSize: 24,
     textAlign: 'center',
+    lineHeight: 32,
+    color: '#FFFFFF',
     textShadowColor: '#000',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
 });
 

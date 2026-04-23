@@ -73,7 +73,6 @@ export async function registerForPushNotificationsAsync(userId) {
 export async function sendPushNotification(toUserId, title, body, data = {}) {
   // В Expo Go не отправляем
   if (isExpoGo || !Notifications) {
-    console.log('⚠️ Push notifications skipped (Expo Go or module not available)');
     return;
   }
 

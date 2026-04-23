@@ -26,7 +26,7 @@ import { get } from 'firebase/database';
 import { EXP_REWARDS, getLevelFromExp } from '../utils/levelSystem';
 
 const BotGameScreen = ({ route, navigation }) => {
-  const { difficulty } = route.params;
+  const { difficulty, botName, botLevel, isFakeOpponent } = route.params;
   const { myPieceColor, opponentPieceColor } = useSettings();
   const { userId } = useAuth();
   const { gameType } = useGameType();
@@ -47,6 +47,8 @@ const BotGameScreen = ({ route, navigation }) => {
   const [myLevel, setMyLevel] = useState(1);
   const [myName, setMyName] = useState('Вы');
   const [myAvatar, setMyAvatar] = useState('😀');
+  const [opponentName, setOpponentName] = useState(botName || 'Бот');
+  const [opponentLevel, setOpponentLevel] = useState(botLevel || 1);
 
   const isAnimatingRef = useRef(false);
   const isBotThinkingRef = useRef(false);
@@ -124,13 +126,25 @@ const BotGameScreen = ({ route, navigation }) => {
 
           if (winner === 1) {
             // Победа игрока
-            if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
-            else if (difficulty === 'medium') expGained = EXP_REWARDS.WIN_BOT_MEDIUM;
-            else if (difficulty === 'hard') expGained = EXP_REWARDS.WIN_BOT_HARD;
-            else if (difficulty === 'grandmaster') expGained = EXP_REWARDS.WIN_BOT_GRANDMASTER;
+            if (isFakeOpponent) {
+              // Игра с "фейковым" соперником (бот вместо реального игрока) - начисляем как за онлайн
+              expGained = EXP_REWARDS.WIN_ONLINE;
+            } else {
+              // Обычная игра с ботом
+              if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
+              else if (difficulty === 'medium') expGained = EXP_REWARDS.WIN_BOT_MEDIUM;
+              else if (difficulty === 'hard') expGained = EXP_REWARDS.WIN_BOT_HARD;
+              else if (difficulty === 'grandmaster') expGained = EXP_REWARDS.WIN_BOT_GRANDMASTER;
+            }
           } else if (winner === 2) {
             // Поражение от бота
-            expGained = EXP_REWARDS.LOSE_BOT;
+            if (isFakeOpponent) {
+              // Игра с "фейковым" соперником - начисляем как за онлайн
+              expGained = EXP_REWARDS.LOSE_ONLINE;
+            } else {
+              // Обычная игра с ботом
+              expGained = EXP_REWARDS.LOSE_BOT;
+            }
           }
 
           await update(userStatsRef, {
@@ -154,7 +168,7 @@ const BotGameScreen = ({ route, navigation }) => {
           const newEntry = {
             timestamp: Date.now(),
             gameType: gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
-            opponent: `Бот (${difficultyNames[difficulty]})`,
+            opponent: isFakeOpponent ? `${opponentName} (Уровень ${opponentLevel})` : `Бот (${difficultyNames[difficulty]})`,
             result: winner === 1 ? 'win' : 'lose',
             expGained: expGained,
           };
@@ -523,8 +537,15 @@ const BotGameScreen = ({ route, navigation }) => {
 
       {/* Инфо о противнике с индикатором хода */}
       <View style={styles.opponentInfo}>
-        <Text style={styles.opponentAvatar}>🤖</Text>
-        <Text style={styles.opponentName}>Бот</Text>
+        <Text style={styles.opponentAvatar}>{isFakeOpponent ? '👤' : '🤖'}</Text>
+        <View style={styles.opponentDetails}>
+          <Text style={styles.opponentName}>{opponentName}</Text>
+          {isFakeOpponent && (
+            <Text style={[styles.levelBadge, { color: getLevelColor(opponentLevel) }]}>
+              ⭐ Ур. {opponentLevel}
+            </Text>
+          )}
+        </View>
         {!isMyTurn && (
           <View style={styles.turnBadge}>
             <Text style={styles.turnBadgeText}>🤖 Думает...</Text>
@@ -625,11 +646,16 @@ const BotGameScreen = ({ route, navigation }) => {
             // Помечаем игру как завершенную без начисления опыта
             setGameOver(true);
             if (gameIdRef.current) {
-              await update(ref(db, `bot_games/${gameIdRef.current}`), {
-                status: 'finished',
-                finishedAt: Date.now(),
-                result: 'player_gave_up',
-              }).catch(console.error);
+              try {
+                await update(ref(db, `bot_games/${gameIdRef.current}`), {
+                  status: 'finished',
+                  finishedAt: Date.now(),
+                  result: 'player_gave_up',
+                });
+              } catch (error) {
+                console.error('Ошибка обновления bot_games (возможно нет интернета):', error);
+                // Игнорируем ошибку и всё равно выходим
+              }
             }
             navigation.goBack();
           },
@@ -699,6 +725,10 @@ const styles = StyleSheet.create({
   },
   opponentAvatar: { fontSize: 24, marginRight: 8 },
   opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
+  opponentDetails: {
+    flexDirection: 'column',
+    marginRight: 10,
+  },
   playerInfo: {
     position: 'absolute',
     bottom: 90,

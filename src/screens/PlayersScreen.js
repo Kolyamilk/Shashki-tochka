@@ -171,8 +171,7 @@ const PlayersScreen = ({ navigation }) => {
   // ← Получаем текст статуса игры
   const getGameStatusText = (playerId) => {
     if (!playerId) return null;
-    if (isInPvpGame(playerId)) return '🎮 Играет против игрока';
-    if (isInBotGame(playerId)) return '🤖 Играет против компьютера';
+    if (isInPvpGame(playerId) || isInBotGame(playerId)) return '🎮 В игре';
     return null;
   };
 

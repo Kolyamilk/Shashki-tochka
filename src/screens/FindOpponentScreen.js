@@ -8,6 +8,7 @@ import { colors } from '../styles/globalStyles';
 import { initialBoard } from '../utils/checkersLogic';
 import { useInvite } from '../context/InviteContext';
 import { useGameType } from '../context/GameTypeContext';
+import { generateRandomBotName, generateRandomLevel } from '../utils/botNames';
 
 const FindOpponentScreen = ({ navigation }) => {
   const [status, setStatus] = useState('Поиск соперника...');
@@ -173,12 +174,25 @@ const FindOpponentScreen = ({ navigation }) => {
 
       timeoutId.current = setTimeout(() => {
         if (isMounted.current && !gameCreatedRef.current) {
-          console.log('⏰ Таймаут поиска - переход на игру с ботом');
+          console.log('⏰ Таймаут поиска - начинаем игру с ботом');
           if (currentPlayerKey.current) {
             remove(ref(db, 'waiting_checkers/' + currentPlayerKey.current));
           }
           gameCreatedRef.current = true;
-          navigation.replace('BotDifficulty');
+
+          // Генерируем случайное имя и уровень для бота
+          const botName = generateRandomBotName();
+          const botLevel = generateRandomLevel();
+
+          console.log('🤖 Создаём игру с ботом:', { botName, botLevel });
+
+          // Переходим на экран игры с ботом, передавая имя и уровень
+          navigation.replace('BotGame', {
+            difficulty: 'grandmaster',
+            botName: botName,
+            botLevel: botLevel,
+            isFakeOpponent: true
+          });
         }
       }, 15000);
 
