@@ -7,6 +7,7 @@ import { db } from '../firebase/config';
 import Board from '../components/Board';
 import VictoryModal from '../components/VictoryModal';
 import { useInvite } from '../context/InviteContext';
+import { useDailyTasks } from '../context/DailyTasksContext';
 import {
   initialBoard,
   getValidMovesForPiece,
@@ -27,6 +28,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const { myPieceColor, opponentPieceColor } = useSettings();
   const [board, setBoard] = useState(initialBoard());
   const { resetInviteFlags } = useInvite();
+  const { updateProgress, TASK_TYPES } = useDailyTasks();
   const [gameData, setGameData] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
@@ -76,6 +78,32 @@ const OnlineGameScreen = ({ route, navigation }) => {
         console.error('Ошибка обновления статистики:', err);
       }
     }
+
+    // Обновляем прогресс ежедневных заданий
+    console.log('📋 Обновление прогресса заданий:', { isWin, gameType: gameData?.gameType });
+
+    if (isWin) {
+      // Победа
+      await updateProgress(TASK_TYPES.WIN_GAMES, 1);
+      await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
+      if (gameData?.gameType === 'giveaway') {
+        await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, 'giveaway');
+      }
+    }
+    // Сыгранная игра (независимо от результата)
+    await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+    await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+    if (gameData?.gameType === 'giveaway') {
+      await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
+    }
+
+    // Подсчёт съеденных шашек
+    const myCaptured = myRole === 1 ? captured.black : captured.white;
+    if (myCaptured > 0) {
+      await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
+    }
+
+    console.log('✅ Прогресс заданий обновлён');
 
     setVictoryData({ isWin, expGained, oldExp, opponentLeft: false });
     setVictoryModalVisible(true);
@@ -195,9 +223,10 @@ const OnlineGameScreen = ({ route, navigation }) => {
       from: { row: move.fromRow, col: move.fromCol },
       to: { row: move.toRow, col: move.toCol },
       piece: { ...piece, king: newKing },
+      wasCapture: wasCapture,
     });
     isAnimatingRef.current = true;
-    
+
     console.log('🎬 Анимация ВАШЕГО хода запущена');
 
     const opponentPlayer = myRole === 1 ? 2 : 1;
@@ -388,7 +417,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
               willBeKing,
               nextPlayer: data.currentPlayer,
             });
-            setAnimatingMove({ from, to, piece: { ...movedPiece, king: newKing } });
+            setAnimatingMove({ from, to, piece: { ...movedPiece, king: newKing }, wasCapture });
             isAnimatingRef.current = true;
             console.log('✅ Анимация соперника запущена');
           } else {
@@ -734,9 +763,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    marginVertical: 10,
     maxWidth: 380,
-    height: 80,
+    minHeight: 50,
+    zIndex: 1,
   },
   capturedPiece: {
     width: 28,
@@ -760,7 +790,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 25,
-    zIndex: 10,
+    zIndex: 5,
   },
   opponentAvatar: { fontSize: 24, marginRight: 8 },
   opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },

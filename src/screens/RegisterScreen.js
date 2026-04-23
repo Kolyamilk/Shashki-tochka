@@ -17,7 +17,11 @@ import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 
-const avatars = ['😀', '😎', '🥳', '😇', '🤓', '👻', '🐱', '🐶', '🦊', '🐼'];
+const avatars = [
+  '😀', '😎', '🥳', '😇', '🤓', '👻', '🐱', '🐶', '🦊', '🐼',
+  '🤠', '🥸', '🤡', '👽', '🤖', '🎃', '🐵', '🐯', '🦁', '🐻',
+  '🐨', '🐸', '🦄', '🐷', '🐮', '🐔', '🐧', '🦉', '🦅', '🐺'
+];
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -56,6 +60,15 @@ const RegisterScreen = ({ navigation }) => {
           totalGames: 0,
           wins: 0,
           exp: 0,
+        },
+        settings: {
+          boardLightColor: '#f0d9b5',
+          boardDarkColor: '#b58863',
+          myPieceColor: '#FFFFFF',
+          opponentPieceColor: '#333333',
+          myKingStyle: 'crown',
+          opponentKingStyle: 'rhombus',
+          kingCrownColor: '#FFD700',
         },
       };
 
@@ -96,6 +109,7 @@ const RegisterScreen = ({ navigation }) => {
         />
 
         <Text style={styles.label}>Выберите аватар:</Text>
+        <Text style={styles.hint}>💡 После регистрации будет доступно ещё больше аватаров в профиле</Text>
         <View style={styles.avatarGrid}>
           {avatars.map((avatar) => (
             <TouchableOpacity
@@ -155,6 +169,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 10,
   },
+  hint: {
+    color: '#4ECDC4',
+    fontSize: 13,
+    marginBottom: 15,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   avatarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -162,13 +183,13 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   avatarOption: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#2c3e50',
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 8,
+    margin: 5,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -177,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3a4a5a',
   },
   avatarEmoji: {
-    fontSize: 32,
+    fontSize: 28,
   },
   registerButton: {
     backgroundColor: colors.primary,

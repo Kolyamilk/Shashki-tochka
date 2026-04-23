@@ -131,6 +131,7 @@ const LocalGameScreen = ({ navigation }) => {
       from: { row: move.fromRow, col: move.fromCol },
       to: { row: move.toRow, col: move.toCol },
       piece: { ...piece, king: newKing },
+      wasCapture: wasCapture,
     });
     isAnimatingRef.current = true;
   };
@@ -218,14 +219,24 @@ const LocalGameScreen = ({ navigation }) => {
       <View style={styles.player2Info}>
         <Text style={styles.playerAvatar}>⚫</Text>
         <Text style={styles.playerName}>Игрок 2</Text>
-        <View style={styles.capturedBadge}>
-          <Text style={styles.capturedText}>🍽️ {player2Captured}</Text>
-        </View>
         {currentPlayer === 2 && (
           <View style={styles.turnBadge}>
             <Text style={styles.turnBadgeText}>⚡ Ход</Text>
           </View>
         )}
+      </View>
+
+      {/* Съеденные шашки игрока 2 (сверху) - игрок 2 съел шашки игрока 1 */}
+      <View style={styles.capturedRow}>
+        {Array.from({ length: player2Captured }).map((_, index) => (
+          <View
+            key={`player2-${index}`}
+            style={[
+              styles.capturedPiece,
+              { backgroundColor: myPieceColor, borderColor: myPieceColor }
+            ]}
+          />
+        ))}
       </View>
 
       <Board
@@ -239,13 +250,23 @@ const LocalGameScreen = ({ navigation }) => {
         onAnimationFinish={onAnimationFinish}
       />
 
+      {/* Съеденные шашки игрока 1 (снизу) - игрок 1 съел шашки игрока 2 */}
+      <View style={styles.capturedRow}>
+        {Array.from({ length: player1Captured }).map((_, index) => (
+          <View
+            key={`player1-${index}`}
+            style={[
+              styles.capturedPiece,
+              { backgroundColor: opponentPieceColor, borderColor: opponentPieceColor }
+            ]}
+          />
+        ))}
+      </View>
+
       {/* Игрок 1 */}
       <View style={styles.player1Info}>
         <Text style={styles.playerAvatar}>⚪</Text>
         <Text style={styles.playerName}>Игрок 1</Text>
-        <View style={styles.capturedBadge}>
-          <Text style={styles.capturedText}>🍽️ {player1Captured}</Text>
-        </View>
         {currentPlayer === 1 && (
           <View style={styles.turnBadge}>
             <Text style={styles.turnBadgeText}>⚡ Ход</Text>
@@ -294,7 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 25,
-    zIndex: 10,
+    zIndex: 5,
   },
   player1Info: {
     position: 'absolute',
@@ -305,18 +326,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 25,
-    zIndex: 10,
+    zIndex: 5,
   },
   playerAvatar: { fontSize: 24, marginRight: 8 },
   playerName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
-  capturedBadge: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 15,
-    marginRight: 10,
+  capturedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginVertical: 10,
+    maxWidth: 380,
+    minHeight: 50,
+    zIndex: 1,
   },
-  capturedText: { fontSize: 13, fontWeight: 'bold', color: '#fff' },
+  capturedPiece: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 3,
+    marginVertical: 3,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
   turnBadge: {
     backgroundColor: '#4ECDC4',
     paddingHorizontal: 12,

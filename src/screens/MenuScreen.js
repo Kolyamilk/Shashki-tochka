@@ -8,10 +8,12 @@ import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
+import { useDailyTasks } from '../context/DailyTasksContext';
 
 const MenuScreen = ({ navigation }) => {
   const { userId } = useAuth();
   const insets = useSafeAreaInsets();
+  const { tasks, getCompletedCount } = useDailyTasks();
   const [userData, setUserData] = useState(null);
   const [topPlayers, setTopPlayers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -155,6 +157,35 @@ const MenuScreen = ({ navigation }) => {
 
         {/* Кнопки меню */}
         <View style={styles.centerContainer}>
+          {/* Кнопка ежедневных заданий */}
+          {getCompletedCount() === 3 ? (
+            <TouchableOpacity
+              style={[styles.button, styles.tasksButtonCompleted]}
+              onPress={() => navigation.navigate('DailyTasks')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.completedTasksContent}>
+                <View style={styles.checkmarkCircle}>
+                  <Text style={styles.checkmarkIcon}>✓</Text>
+                </View>
+                <View style={styles.completedTextContainer}>
+                  <Text style={styles.completedMainText}>Все задачи выполнены!</Text>
+                  <Text style={styles.completedSubText}>+300 опыта получено</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.button, styles.tasksButton]}
+              onPress={() => navigation.navigate('DailyTasks')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.buttonText}>
+                📋 Задачи на сегодня ({getCompletedCount()}/3)
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
             onPress={() => navigation.navigate('OnlineGameSetup')}
@@ -335,7 +366,49 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   localButton: {
+    backgroundColor: '#9b59b6',
+  },
+  tasksButton: {
+    backgroundColor: '#e74c3c',
+  },
+  tasksButtonCompleted: {
     backgroundColor: '#27ae60',
+    borderWidth: 2,
+    borderColor: '#2ecc71',
+  },
+  completedTasksContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmarkCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkmarkIcon: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#27ae60',
+  },
+  completedTextContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  completedMainText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  completedSubText: {
+    color: '#d4f1e8',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 1,
   },
   buttonText: {
     color: '#fff',

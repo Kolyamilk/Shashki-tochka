@@ -3,8 +3,9 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSettings } from '../context/SettingsContext';
+import { soundManager } from '../utils/soundManager';
 
-const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
+const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture }) => {
   const {
     myPieceColor,
     opponentPieceColor,
@@ -68,6 +69,13 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
   useEffect(() => {
     console.log('🎬 AnimatedPiece: запуск анимации', { from, to, deltaX, deltaY });
 
+    // Воспроизводим звук в зависимости от типа хода
+    if (wasCapture) {
+      soundManager.playCaptureSound();
+    } else {
+      soundManager.playMoveSound();
+    }
+
     // Сбрасываем значения перед началом анимации
     translateX.setValue(0);
     translateY.setValue(0);
@@ -93,7 +101,7 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize }) => {
       translateX.stopAnimation();
       translateY.stopAnimation();
     };
-  }, [deltaX, deltaY]);
+  }, [deltaX, deltaY, wasCapture]);
 
   // ← Контейнер с absolute позиционированием
   if (piece.king) {

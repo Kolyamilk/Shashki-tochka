@@ -79,6 +79,7 @@ const Board = ({ board, selectedCell, validMoves, onSelectCell, myRole, captureM
           onFinish={onAnimationFinish}
           myRole={myRole}
           cellSize={45}
+          wasCapture={animatingMove.wasCapture}
         />
       )}
     </View>

@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { registerForPushNotificationsAsync } from './src/utils/notifications';
+import { initSounds } from './src/utils/soundManager';
 import Constants from 'expo-constants';
 import { ref, onValue, off, update, remove, get, set, onDisconnect } from 'firebase/database';
 import { db } from './src/firebase/config';
@@ -25,10 +26,12 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import PlayersScreen from './src/screens/PlayersScreen';
 import PlayerProfileScreen from './src/screens/PlayerProfileScreen';
+import DailyTasksScreen from './src/screens/DailyTasksScreen';
 import { colors } from './src/styles/globalStyles';
 import { GameTypeProvider } from './src/context/GameTypeContext';
 import GameTypeScreen from './src/screens/GameTypeScreen';
 import { InviteProvider } from './src/context/InviteContext';
+import { DailyTasksProvider } from './src/context/DailyTasksContext';
 import ProfileGiftScreen from './src/screens/ProfileGiftScreen';
 
 const Stack = createNativeStackNavigator();
@@ -409,6 +412,7 @@ function AppNavigator() {
               <Stack.Screen name="PlayerProfile" component={PlayerProfileScreen} />
               <Stack.Screen name="InviteGameSetup" component={InviteGameSetupScreen} />
               <Stack.Screen name="GiftScreen" component={ProfileGiftScreen} />
+              <Stack.Screen name="DailyTasks" component={DailyTasksScreen} />
             </>
           )}
         </Stack.Navigator>
@@ -418,11 +422,18 @@ function AppNavigator() {
 }
 
 export default function App() {
+  // Инициализация звуков при запуске приложения
+  useEffect(() => {
+    initSounds();
+  }, []);
+
   return (
     <AuthProvider>
       <SettingsProvider>
         <GameTypeProvider>
-          <AppNavigator />
+          <DailyTasksProvider>
+            <AppNavigator />
+          </DailyTasksProvider>
         </GameTypeProvider>
       </SettingsProvider>
     </AuthProvider>

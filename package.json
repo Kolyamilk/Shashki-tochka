@@ -7,12 +7,19 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "build:apk": "cd android && gradlew.bat assembleRelease",
+    "build:apk-debug": "cd android && gradlew.bat assembleDebug"
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.js"],
-    "moduleFileExtensions": ["js", "jsx"],
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "moduleFileExtensions": [
+      "js",
+      "jsx"
+    ],
     "transform": {
       "^.+\\.jsx?$": "babel-jest"
     },
@@ -26,6 +33,7 @@
     "@react-navigation/native-stack": "^6.9.17",
     "babel-preset-expo": "~11.0.0",
     "expo": "~51.0.0",
+    "expo-av": "^16.0.8",
     "expo-constants": "~16.0.2",
     "expo-device": "~6.0.2",
     "expo-linear-gradient": "~13.0.2",

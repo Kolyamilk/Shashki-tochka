@@ -5,11 +5,15 @@ import { colors } from '../styles/globalStyles';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 import { shouldReceiveGift, getGiftForLevel } from '../utils/giftSystem';
 import GiftReceivedModal from './GiftReceivedModal';
+import TaskCompletedModal from './TaskCompletedModal';
+import { useDailyTasks } from '../context/DailyTasksContext';
 
 const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
+  const { newlyCompletedTask, clearCompletedTask } = useDailyTasks();
+  const [showTaskModal, setShowTaskModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -31,6 +35,11 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
       if (leveledUp && shouldReceiveGift(newLevelInfo.level)) {
         const gift = getGiftForLevel(newLevelInfo.level);
         setReceivedGift(gift);
+      }
+
+      // Проверяем, есть ли выполненное задание
+      if (newlyCompletedTask) {
+        setShowTaskModal(true);
       }
 
       // Появление модального окна
@@ -92,8 +101,9 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
       setShowLevelUp(false);
       setReceivedGift(null);
       setShowGiftModal(false);
+      setShowTaskModal(false);
     }
-  }, [visible, leveledUp]);
+  }, [visible, leveledUp, newlyCompletedTask]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -212,6 +222,16 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
         onClose={() => {
           setShowGiftModal(false);
           onClose();
+        }}
+      />
+
+      {/* Модальное окно выполненного задания */}
+      <TaskCompletedModal
+        visible={showTaskModal}
+        task={newlyCompletedTask}
+        onClose={() => {
+          setShowTaskModal(false);
+          clearCompletedTask();
         }}
       />
     </Modal>

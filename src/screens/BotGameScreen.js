@@ -22,6 +22,7 @@ import { getBestMove } from '../utils/botLogic';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { useInvite } from '../context/InviteContext';
+import { useDailyTasks } from '../context/DailyTasksContext';
 import { get } from 'firebase/database';
 import { EXP_REWARDS, getLevelFromExp } from '../utils/levelSystem';
 
@@ -31,6 +32,14 @@ const BotGameScreen = ({ route, navigation }) => {
   const { userId } = useAuth();
   const { gameType } = useGameType();
   const { resetInviteFlags } = useInvite();
+  const { updateProgress, TASK_TYPES } = useDailyTasks();
+
+  console.log('🎮 BotGameScreen загружен:', {
+    gameType,
+    userId,
+    hasUpdateProgress: !!updateProgress,
+    hasTASK_TYPES: !!TASK_TYPES
+  });
 
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -105,6 +114,8 @@ const BotGameScreen = ({ route, navigation }) => {
       if (gameOver) return;
       setGameOver(true);
 
+      console.log('🎮 endGame вызван:', { winner, gameType, userId });
+
       let expGained = 0;
       let oldExp = 0;
       const isWin = winner === 1;
@@ -153,6 +164,33 @@ const BotGameScreen = ({ route, navigation }) => {
           });
 
           console.log(`✨ Начислено ${expGained} опыта. Было: ${oldExp}, стало: ${oldExp + expGained}`);
+
+          // Обновляем прогресс ежедневных заданий
+          console.log('📋 Обновление прогресса заданий:', { winner, gameType });
+
+          if (winner === 1) {
+            // Победа
+            await updateProgress(TASK_TYPES.WIN_GAMES, 1);
+            await updateProgress(TASK_TYPES.WIN_BOT, 1);
+            if (gameType === 'giveaway') {
+              await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, gameType);
+            }
+          }
+          // Сыгранная игра (независимо от результата)
+          await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+          if (gameType === 'giveaway') {
+            await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, gameType);
+          }
+
+          // Подсчёт съеденных шашек
+          const initialPiecesCount = 12;
+          const player2Pieces = board.flat().filter(p => p && p.player === 2).length;
+          const capturedByPlayer = initialPiecesCount - player2Pieces;
+          if (capturedByPlayer > 0) {
+            await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
+          }
+
+          console.log('✅ Прогресс заданий обновлён');
 
           // Сохраняем историю начисления опыта
           const expHistoryRef = ref(db, `users/${userId}/expHistory`);
@@ -344,9 +382,10 @@ const BotGameScreen = ({ route, navigation }) => {
       from: { row: move.fromRow, col: move.fromCol },
       to: { row: move.toRow, col: move.toCol },
       piece: { ...piece, king: newKing },
+      wasCapture: wasCapture,
     });
     isAnimatingRef.current = true;
-    
+
     console.log('🎬 Анимация запущена');
   };
 
@@ -679,9 +718,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    marginVertical: 10,
     maxWidth: 380,
-    height: 80,
+    minHeight: 50,
+    zIndex: 1,
   },
   capturedPiece: {
     width: 28,
@@ -722,7 +762,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 25,
-    zIndex: 10,
+    zIndex: 5,
   },
   opponentAvatar: { fontSize: 24, marginRight: 8 },
   opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
