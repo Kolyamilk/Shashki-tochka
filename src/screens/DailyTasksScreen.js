@@ -1,59 +1,49 @@
 // src/screens/DailyTasksScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { colors } from '../styles/globalStyles';
 import { useDailyTasks } from '../context/DailyTasksContext';
 import { TASK_REWARD } from '../utils/dailyTasks';
 
 const DailyTasksScreen = ({ navigation }) => {
-  const { tasks, loading, getCompletedCount, refreshDailyTasks, userLevel, canRefreshTasks, getTimeUntilNextRefresh } = useDailyTasks();
-  const [showRefreshModal, setShowRefreshModal] = useState(false);
-  const [showRefreshLocked, setShowRefreshLocked] = useState(false);
-  const [dotCount, setDotCount] = useState(0);
-  const [timeUntilRefresh, setTimeUntilRefresh] = useState(null);
+  const { 
+    tasks, 
+    loading, 
+    getCompletedCount, 
+    refreshDailyTasks, 
+    userLevel, 
+    canRefreshTasks 
+  } = useDailyTasks();
 
-  useEffect(() => {
+  const [showRefreshModal, setShowRefreshModal] = useState(false);
+  const [showLevelLockedModal, setShowLevelLockedModal] = useState(false);
+  const [showAlreadyUsedModal, setShowAlreadyUsedModal] = useState(false);
+  const [dotCount, setDotCount] = useState(0);
+
+  // Анимация точек при обновлении
+  React.useEffect(() => {
     if (!showRefreshModal) {
       setDotCount(0);
       return;
     }
-
     const interval = setInterval(() => {
-      setDotCount((count) => (count + 1) % 4);
+      setDotCount((c) => (c + 1) % 4);
     }, 300);
-
     return () => clearInterval(interval);
   }, [showRefreshModal]);
 
-  // Обновляем время до следующего обновления каждую секунду
-  useEffect(() => {
-    const updateTimeUntilRefresh = () => {
-      const timeMs = getTimeUntilNextRefresh();
-      setTimeUntilRefresh(timeMs);
-    };
-
-    updateTimeUntilRefresh();
-    const interval = setInterval(updateTimeUntilRefresh, 1000);
-    return () => clearInterval(interval);
-  }, [getTimeUntilNextRefresh]);
-
-  const formatTimeUntilRefresh = (milliseconds) => {
-    if (milliseconds === null) return null;
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  };
-
   const handleRefresh = async () => {
     if (showRefreshModal) return;
+    if (userLevel < 10) {
+      setShowLevelLockedModal(true);
+      return;
+    }
     if (!canRefreshTasks) {
-      setShowRefreshLocked(true);
+      setShowAlreadyUsedModal(true);
       return;
     }
     setShowRefreshModal(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     await refreshDailyTasks();
     setShowRefreshModal(false);
   };
@@ -70,7 +60,8 @@ const DailyTasksScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Modal visible={showRefreshModal} transparent animationType="fade" onRequestClose={() => {}}>
+      {/* Модалка: обновление в процессе */}
+      <Modal visible={showRefreshModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalText}>
@@ -79,105 +70,75 @@ const DailyTasksScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-      <Modal visible={showRefreshLocked} transparent animationType="fade" onRequestClose={() => setShowRefreshLocked(false)}>
+
+      {/* Модалка: уровень ниже 10 */}
+      <Modal visible={showLevelLockedModal} transparent animationType="fade" onRequestClose={() => setShowLevelLockedModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={[styles.modalText, { fontSize: 20, marginBottom: 15 }]}>
-              ⏱️ Обновление недоступно
-            </Text>
-            <Text style={styles.modalText}>
-              Вы уже использовали ежедневное обновление.
-            </Text>
-            <Text style={[styles.modalText, { marginTop: 15, fontSize: 16, color: '#FFD700' }]}>
-              Время до следующего обновления:
-            </Text>
-            <Text style={[styles.modalText, { marginTop: 8, fontSize: 24, fontWeight: 'bold', color: '#4ECDC4' }]}>
-              {formatTimeUntilRefresh(timeUntilRefresh)}
-            </Text>
-            <Text style={[styles.modalText, { marginTop: 15, fontSize: 13, color: '#aaa' }]}>
-              Обновления доступны каждый день в 00:00
-            </Text>
-            <TouchableOpacity
-              style={[styles.refreshButton, { marginTop: 20 }]}
-              onPress={() => setShowRefreshLocked(false)}
-            >
-              <Text style={styles.refreshButtonText}>Ок</Text>
+            <Text style={[styles.modalText, { fontSize: 22, marginBottom: 15 }]}>🔒 Доступ ограничен</Text>
+            <Text style={styles.modalText}>Функция «Обновить задания» станет доступна после достижения</Text>
+            <Text style={[styles.modalText, { fontSize: 28, fontWeight: 'bold', color: '#FFD700', marginVertical: 10 }]}>10 уровня</Text>
+            <TouchableOpacity style={styles.modalButton} onPress={() => setShowLevelLockedModal(false)}>
+              <Text style={styles.modalButtonText}>Понятно</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Модалка: уже использовано сегодня */}
+      <Modal visible={showAlreadyUsedModal} transparent animationType="fade" onRequestClose={() => setShowAlreadyUsedModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalText, { fontSize: 22, marginBottom: 15 }]}>⏳ Уже использовано</Text>
+            <Text style={styles.modalText}>Вы уже обновляли задания сегодня.</Text>
+            <Text style={[styles.modalText, { marginTop: 15, fontSize: 14, color: '#aaa' }]}>Новое ручное обновление станет доступно завтра после 00:00.</Text>
+            <TouchableOpacity style={styles.modalButton} onPress={() => setShowAlreadyUsedModal(false)}>
+              <Text style={styles.modalButtonText}>Ок</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>📋 Ежедневные задания</Text>
-        <Text style={styles.subtitle}>
-          Выполнено: {completedCount} / {tasks.length}
-        </Text>
-        <Text style={styles.rewardInfo}>
-          💰 Награда за задание: +{TASK_REWARD} опыта
-        </Text>
+        <Text style={styles.subtitle}>Выполнено: {completedCount} / {tasks.length}</Text>
+        <Text style={styles.rewardInfo}>💰 Награда за задание: +{TASK_REWARD} опыта</Text>
 
         <View style={styles.tasksContainer}>
-          {tasks.map((task, index) => (
-            <View
-              key={task.id}
-              style={[
-                styles.taskCard,
-                task.completed && styles.taskCardCompleted,
-              ]}
-            >
+          {tasks.map((task) => (
+            <View key={task.id} style={[styles.taskCard, task.completed && styles.taskCardCompleted]}>
               <View style={styles.taskHeader}>
                 <Text style={styles.taskIcon}>{task.icon}</Text>
                 <View style={styles.taskInfo}>
                   <Text style={styles.taskTitle}>{task.title}</Text>
                   <Text style={styles.taskDescription}>{task.description}</Text>
                 </View>
-                {task.completed && (
-                  <View style={styles.checkmark}>
-                    <Text style={styles.checkmarkText}>✓</Text>
-                  </View>
-                )}
+                {task.completed && <View style={styles.checkmark}><Text style={styles.checkmarkText}>✓</Text></View>}
               </View>
-
               <View style={styles.progressContainer}>
                 <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${Math.min((task.progress / task.target) * 100, 100)}%`,
-                      },
-                    ]}
-                  />
+                  <View style={[styles.progressFill, { width: `${Math.min((task.progress / task.target) * 100, 100)}%` }]} />
                 </View>
-                <Text style={styles.progressText}>
-                  {task.progress} / {task.target}
-                </Text>
+                <Text style={styles.progressText}>{task.progress} / {task.target}</Text>
               </View>
             </View>
           ))}
         </View>
 
-        <Text style={styles.resetInfo}>
-          🕐 Задания обновляются каждый день в 00:00
-        </Text>
+        <Text style={styles.resetInfo}>🕐 Задания обновляются автоматически каждый день в 00:00 (МСК)</Text>
 
-        {canRefreshTasks ? (
-          <View style={styles.refreshAvailableContainer}>
-            <Text style={styles.refreshAvailableText}>✨ Обновление доступно!</Text>
-          </View>
-        ) : (
-          <View style={styles.refreshLockedContainer}>
-            <Text style={styles.refreshLockedText}>
-              ⏱️ Следующее обновление через: {formatTimeUntilRefresh(timeUntilRefresh)}
-            </Text>
+        {userLevel >= 10 && (
+          <View style={styles.refreshStatusContainer}>
+            {canRefreshTasks ? (
+              <Text style={styles.refreshAvailableText}>✨ Можно обновить задания сегодня</Text>
+            ) : (
+              <Text style={styles.refreshLockedText}>🔁 Сегодня вы уже обновляли задания</Text>
+            )}
           </View>
         )}
 
         <TouchableOpacity
-          style={[
-            styles.refreshButton,
-            !canRefreshTasks && styles.refreshButtonDisabledLocked,
-            showRefreshModal && styles.refreshButtonDisabled,
-          ]}
+          style={[styles.refreshButton, (!canRefreshTasks || userLevel < 10) && styles.refreshButtonDisabled]}
           onPress={handleRefresh}
           disabled={showRefreshModal}
         >
@@ -185,14 +146,9 @@ const DailyTasksScreen = ({ navigation }) => {
             {showRefreshModal ? 'Обновляем задачи' : 'Обновить задания'}
           </Text>
         </TouchableOpacity>
-
-       
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Text style={styles.backButtonText}>← Назад</Text>
       </TouchableOpacity>
     </View>
@@ -201,7 +157,7 @@ const DailyTasksScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop:60,
+    paddingTop: 60,
     flex: 1,
     backgroundColor: colors.background,
   },
@@ -238,7 +194,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#aaa',
     textAlign: 'center',
-    marginTop:10,
+    marginTop: 10,
     marginBottom: 20,
     fontStyle: 'italic',
   },
@@ -325,7 +281,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   refreshButtonText: {
-    
     color: '#1a2a3a',
     fontSize: 14,
     fontWeight: '700',
@@ -363,18 +318,6 @@ const styles = StyleSheet.create({
     color: '#ff9999',
     fontSize: 14,
     fontWeight: '600',
-  },
-  lockedInfo: {
-    color: '#ff6b6b',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  refreshingText: {
-    color: '#FFD700',
-    textAlign: 'center',
-    marginBottom: 10,
-    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
@@ -415,6 +358,43 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  modalButton: {
+    backgroundColor: '#4ECDC4',
+    paddingHorizontal: 30,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  modalButtonText: {
+    color: '#1a2a3a',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  refreshStatusContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  refreshAvailableText: {
+    color: '#4ECDC4',
+    fontSize: 15,
+    fontWeight: '600',
+    backgroundColor: 'rgba(78,205,196,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  refreshLockedText: {
+    color: '#ff9999',
+    fontSize: 14,
+    fontWeight: '600',
+    backgroundColor: 'rgba(255,107,107,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  refreshButtonDisabled: {
+    opacity: 0.5,
   },
 });
 
