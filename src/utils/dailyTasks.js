@@ -5,7 +5,10 @@ export const TASK_TYPES = {
   WIN_GAMES: 'win_games',
   PLAY_GAMES: 'play_games',
   WIN_ONLINE: 'win_online',
+  PLAY_ONLINE: 'play_online',
   WIN_BOT: 'win_bot',
+  LOSE_BOT: 'lose_bot',
+  WIN_BOT_HARD: 'win_bot_hard',
   CAPTURE_PIECES: 'capture_pieces',
   WIN_GIVEAWAY: 'win_giveaway',
   PLAY_GIVEAWAY: 'play_giveaway',
@@ -32,11 +35,27 @@ const TASK_TEMPLATES = [
     icon: '🏆',
   },
   {
+    id: 'win_3_games',
+    type: TASK_TYPES.WIN_GAMES,
+    title: 'Тройная победа',
+    description: 'Выиграйте 3 игры',
+    target: 3,
+    icon: '🏆',
+  },
+  {
     id: 'play_3_games',
     type: TASK_TYPES.PLAY_GAMES,
     title: 'Активный игрок',
     description: 'Сыграйте 3 игры',
     target: 3,
+    icon: '🎮',
+  },
+  {
+    id: 'play_5_games',
+    type: TASK_TYPES.PLAY_GAMES,
+    title: 'Марафон',
+    description: 'Сыграйте 5 игр',
+    target: 5,
     icon: '🎮',
   },
   {
@@ -48,6 +67,22 @@ const TASK_TEMPLATES = [
     icon: '🌐',
   },
   {
+    id: 'play_online_2',
+    type: TASK_TYPES.PLAY_ONLINE,
+    title: 'Онлайн марафон',
+    description: 'Сыграйте 2 онлайн игры',
+    target: 2,
+    icon: '🌐',
+  },
+  {
+    id: 'win_online_2',
+    type: TASK_TYPES.WIN_ONLINE,
+    title: 'Онлайн доминация',
+    description: 'Выиграйте 2 онлайн игры',
+    target: 2,
+    icon: '🌐',
+  },
+  {
     id: 'win_bot_easy',
     type: TASK_TYPES.WIN_BOT,
     title: 'Победитель ботов',
@@ -56,11 +91,27 @@ const TASK_TEMPLATES = [
     icon: '🤖',
   },
   {
+    id: 'lose_bot_once',
+    type: TASK_TYPES.LOSE_BOT,
+    title: 'Урок от машины',
+    description: 'Проиграйте 1 раз против бота',
+    target: 1,
+    icon: '💔',
+  },
+  {
     id: 'capture_10_pieces',
     type: TASK_TYPES.CAPTURE_PIECES,
     title: 'Охотник',
     description: 'Съешьте 10 шашек',
     target: 10,
+    icon: '🍽️',
+  },
+  {
+    id: 'capture_15_pieces',
+    type: TASK_TYPES.CAPTURE_PIECES,
+    title: 'Массивный урон',
+    description: 'Съешьте 15 шашек',
+    target: 15,
     icon: '🍽️',
   },
   {
@@ -87,7 +138,86 @@ const TASK_TEMPLATES = [
     target: 1,
     icon: '👥',
   },
+  {
+    id: 'play_5_games_big',
+    type: TASK_TYPES.PLAY_GAMES,
+    title: 'Большой марафон',
+    description: 'Сыграйте 5 игр',
+    target: 5,
+    icon: '🏃‍♂️',
+  },
+  {
+    id: 'win_online_3',
+    type: TASK_TYPES.WIN_ONLINE,
+    title: 'Онлайн мастер',
+    description: 'Выиграйте 3 онлайн игры',
+    target: 3,
+    icon: '🌟',
+  },
+  {
+    id: 'capture_20_pieces',
+    type: TASK_TYPES.CAPTURE_PIECES,
+    title: 'Серийный охотник',
+    description: 'Съешьте 20 шашек',
+    target: 20,
+    icon: '🐺',
+  },
+  {
+    id: 'win_streak_3',
+    type: TASK_TYPES.WIN_STREAK,
+    title: 'Тройная серия',
+    description: 'Выиграйте 3 игры подряд',
+    target: 3,
+    icon: '🔥',
+  },
+  {
+    id: 'win_bot_hard',
+    type: TASK_TYPES.WIN_BOT_HARD,
+    title: 'Грозный соперник',
+    description: 'Выиграйте у бота высокой сложности',
+    target: 1,
+    icon: '💪',
+  },
+  {
+    id: 'win_streak_2',
+    type: TASK_TYPES.WIN_STREAK,
+    title: 'Победная серия',
+    description: 'Выиграйте 2 игры подряд',
+    target: 2,
+    icon: '🔥',
+  },
 ];
+
+const getSeedHash = (input) => {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+};
+
+const createSeededRandom = (seed) => {
+  let value = seed >>> 0;
+  return () => {
+    value = Math.imul(value ^ (value >>> 15), 1 | value);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const shuffleWithSeed = (items, seed) => {
+  const result = [...items];
+  const random = createSeededRandom(seed);
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+// Номер версии генератора ежедневных заданий.
+// Увеличивайте, когда шаблоны или логика выбора меняются.
+export const DAILY_TASKS_VERSION = 3;
 
 // Награда за выполнение задания
 export const TASK_REWARD = 100;
@@ -99,18 +229,11 @@ export const getTodayDate = () => {
 };
 
 // Генерация 3 случайных заданий на день
-export const generateDailyTasks = (date = getTodayDate()) => {
-  // Используем дату как seed для генерации одинаковых заданий в течение дня
-  const seed = date.split('-').reduce((acc, val) => acc + parseInt(val), 0);
+export const generateDailyTasks = (date = getTodayDate(), seedOverride = null) => {
+  const seedInput = seedOverride !== null ? `${date}:${seedOverride}` : date;
+  const seed = getSeedHash(seedInput);
+  const shuffled = shuffleWithSeed(TASK_TEMPLATES, seed);
 
-  // Перемешиваем задания на основе seed
-  const shuffled = [...TASK_TEMPLATES].sort((a, b) => {
-    const hashA = (seed + a.id.charCodeAt(0)) % 100;
-    const hashB = (seed + b.id.charCodeAt(0)) % 100;
-    return hashA - hashB;
-  });
-
-  // Берём первые 3 задания
   return shuffled.slice(0, 3).map((task, index) => ({
     ...task,
     progress: 0,

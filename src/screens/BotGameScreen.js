@@ -127,7 +127,10 @@ const BotGameScreen = ({ route, navigation }) => {
           const statsSnap = await get(userStatsRef);
           const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
 
-          oldExp = stats.exp || 0;
+          const currentExp = stats.exp || 0;
+          const currentTotalGames = stats.totalGames || 0;
+          const currentWins = stats.wins || 0;
+          oldExp = currentExp;
 
           console.log('📊 Начисление опыта:', {
             oldExp,
@@ -159,25 +162,44 @@ const BotGameScreen = ({ route, navigation }) => {
             }
           }
 
-          await update(userStatsRef, {
-            exp: oldExp + expGained,
-          });
+          const updatedStats = {
+            totalGames: currentTotalGames + 1,
+            exp: currentExp + expGained,
+          };
+          if (winner === 1) {
+            updatedStats.wins = currentWins + 1;
+          }
+
+          await update(userStatsRef, updatedStats);
 
           console.log(`✨ Начислено ${expGained} опыта. Было: ${oldExp}, стало: ${oldExp + expGained}`);
 
           // Обновляем прогресс ежедневных заданий
-          console.log('📋 Обновление прогресса заданий:', { winner, gameType });
+          console.log('📋 Обновление прогресса заданий:', { winner, gameType, isFakeOpponent });
 
           if (winner === 1) {
             // Победа
             await updateProgress(TASK_TYPES.WIN_GAMES, 1);
-            await updateProgress(TASK_TYPES.WIN_BOT, 1);
+            if (isFakeOpponent) {
+              await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
+            } else {
+              await updateProgress(TASK_TYPES.WIN_BOT, 1);
+              if (difficulty === 'hard' || difficulty === 'grandmaster') {
+                await updateProgress(TASK_TYPES.WIN_BOT_HARD, 1);
+              }
+            }
             if (gameType === 'giveaway') {
               await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, gameType);
             }
+          } else if (winner === 2 && !isFakeOpponent) {
+            // Поражение от настоящего бота
+            await updateProgress(TASK_TYPES.LOSE_BOT, 1);
           }
           // Сыгранная игра (независимо от результата)
           await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+          if (isFakeOpponent) {
+            await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
+          }
           if (gameType === 'giveaway') {
             await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, gameType);
           }

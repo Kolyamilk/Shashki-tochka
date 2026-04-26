@@ -77,6 +77,18 @@ const OnlineGameScreen = ({ route, navigation }) => {
       } catch (err) {
         console.error('Ошибка обновления статистики:', err);
       }
+
+      try {
+        await update(ref(db, `games_checkers/${gameId}`), {
+          status: 'finished',
+          winner: winnerId,
+          loser: loserId,
+          surrendered: isSurrender ? loserId : null,
+          finishedAt: Date.now(),
+        });
+      } catch (err) {
+        console.error('Ошибка обновления статуса игры:', err);
+      }
     }
 
     // Обновляем прогресс ежедневных заданий
@@ -92,6 +104,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
     // Сыгранная игра (независимо от результата)
     await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+    await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
     await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
     if (gameData?.gameType === 'giveaway') {
       await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
@@ -294,11 +307,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
           return;
         }
         if (!isGameEnding.current && !isCleanupDone.current) {
-          // ... обработка удаления игры (оставляем без изменений) ...
+          console.log('⚠️ Игра удалена из Firebase до завершения, игнорирую.');
           isCleanupDone.current = true;
-          // ... начисление опыта ...
-          setVictoryData({ isWin: true, expGained, oldExp, opponentLeft: true });
-          setVictoryModalVisible(true);
         }
         return;
       }
@@ -306,24 +316,28 @@ const OnlineGameScreen = ({ route, navigation }) => {
       if (!isInitialized.current) isInitialized.current = true;
 
       // Проверяем, сдался ли противник
-      if (data.status === 'finished' && data.surrendered && !isGameEnding.current) {
-        console.log('🚪 Противник сдался');
+      if (data.status === 'finished' && !isGameEnding.current) {
+        console.log('🏁 Игра завершена на сервере');
         isGameEnding.current = true;
 
         const isWin = data.winner === playerKey;
         let expGained = 0;
         let oldExp = 0;
+        let opponentLeft = false;
 
-        if (isWin) {
-          // Я победил - противник сдался
-          const myStatsRef = ref(db, `users/${playerKey}/stats`);
-          const myStatsSnap = await get(myStatsRef);
-          const myStats = myStatsSnap.val() || { exp: 0 };
-          oldExp = myStats.exp || 0;
-          expGained = EXP_REWARDS.WIN_ONLINE;
+        if (data.surrendered) {
+          console.log('🚪 Противник сдался');
+          opponentLeft = true;
+          if (isWin) {
+            const myStatsRef = ref(db, `users/${playerKey}/stats`);
+            const myStatsSnap = await get(myStatsRef);
+            const myStats = myStatsSnap.val() || { exp: 0 };
+            oldExp = myStats.exp || 0;
+            expGained = EXP_REWARDS.WIN_ONLINE;
+          }
         }
 
-        setVictoryData({ isWin, expGained, oldExp, opponentLeft: true });
+        setVictoryData({ isWin, expGained, oldExp, opponentLeft });
         setVictoryModalVisible(true);
         return;
       }
