@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { ref, onValue, update, off, remove, get } from 'firebase/database';
+import { ref, onValue, update, remove, get } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
 import VictoryModal from '../components/VictoryModal';
@@ -20,8 +20,111 @@ import { EXP_REWARDS, getLevelFromExp, getLevelColor } from '../utils/levelSyste
 import { colors } from '../styles/globalStyles';
 import { useSettings } from '../context/SettingsContext';
 
-const cleanupGame = async (gameId) => { /* ... без изменений ... */ };
-const updateStats = async (winnerId, loserId, isSurrender = false) => { /* ... без изменений ... */ };
+const cleanupGame = async (gameId) => {
+  if (!gameId) return;
+  try {
+    console.log(`🧹 Очистка игры ${gameId}...`);
+    await remove(ref(db, `games_checkers/${gameId}`));
+    const invitationsRef = ref(db, 'invitations');
+    const snapshot = await get(invitationsRef);
+    if (snapshot.exists()) {
+      const invites = snapshot.val();
+      for (const [invId, inv] of Object.entries(invites)) {
+        if (inv.gameId === gameId) {
+          await remove(ref(db, `invitations/${invId}`));
+          console.log(`🗑️ Удалено приглашение ${invId}`);
+        }
+      }
+    }
+    console.log(`✅ Игра ${gameId} удалена из базы`);
+  } catch (error) {
+    console.error('❌ Ошибка очистки игры:', error);
+  }
+};
+
+const updateStats = async (winnerId, loserId, isSurrender = false) => {
+  const winnerRef = ref(db, `users/${winnerId}/stats`);
+  const loserRef = ref(db, `users/${loserId}/stats`);
+  const winnerSnap = await get(winnerRef);
+  const loserSnap = await get(loserRef);
+  const winnerStats = winnerSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+  const loserStats = loserSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+
+  const winnerOldExp = winnerStats.exp || 0;
+  const loserOldExp = loserStats.exp || 0;
+
+  const winnerExpGain = isSurrender ? 150 : EXP_REWARDS.WIN_ONLINE;
+  const loserExpGain = isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE;
+
+  await update(winnerRef, {
+    totalGames: winnerStats.totalGames + 1,
+    wins: winnerStats.wins + 1,
+    exp: winnerOldExp + winnerExpGain,
+  });
+
+  await update(loserRef, {
+    totalGames: loserStats.totalGames + 1,
+    wins: loserStats.wins,
+    exp: loserOldExp + loserExpGain,
+  });
+
+  // История для победителя
+  const winnerHistoryRef = ref(db, `users/${winnerId}/expHistory`);
+  const winnerHistorySnap = await get(winnerHistoryRef);
+  const winnerHistory = winnerHistorySnap.val() || [];
+  const loserUserSnap = await get(ref(db, `users/${loserId}`));
+  const loserUserData = loserUserSnap.val() || {};
+  const loserName = loserUserData.name || 'Игрок';
+  const loserLevel = getLevelFromExp(loserUserData.stats?.exp || 0).level;
+  const winnerEntry = {
+    timestamp: Date.now(),
+    gameType: 'Онлайн игра',
+    opponent: `${loserName} (${loserLevel} ур.)`,
+    result: 'win',
+    expGained: winnerExpGain,
+  };
+  winnerHistory.unshift(winnerEntry);
+  if (winnerHistory.length > 50) winnerHistory.pop();
+
+  const winnerOldLevel = getLevelFromExp(winnerOldExp).level;
+  const winnerNewLevel = getLevelFromExp(winnerOldExp + winnerExpGain).level;
+  const leveledUp = winnerNewLevel > winnerOldLevel;
+  const updateData = { expHistory: winnerHistory };
+  if (leveledUp && winnerNewLevel % 5 === 0) {
+    const winnerUserRef = ref(db, `users/${winnerId}`);
+    const winnerUserSnap = await get(winnerUserRef);
+    const winnerUserData = winnerUserSnap.val() || {};
+    const newGifts = winnerUserData.newGifts || [];
+    const giftId = `gift_level_${winnerNewLevel}`;
+    if (!newGifts.includes(giftId)) {
+      updateData.newGifts = [...newGifts, giftId];
+    }
+  }
+  await update(ref(db, `users/${winnerId}`), updateData);
+
+  // История для проигравшего (если не сдался)
+  if (!isSurrender) {
+    const loserHistoryRef = ref(db, `users/${loserId}/expHistory`);
+    const loserHistorySnap = await get(loserHistoryRef);
+    const loserHistory = loserHistorySnap.val() || [];
+    const winnerUserSnap = await get(ref(db, `users/${winnerId}`));
+    const winnerUserData = winnerUserSnap.val() || {};
+    const winnerName = winnerUserData.name || 'Игрок';
+    const winnerLevel = getLevelFromExp(winnerUserData.stats?.exp || 0).level;
+    const loserEntry = {
+      timestamp: Date.now(),
+      gameType: 'Онлайн игра',
+      opponent: `${winnerName} (${winnerLevel} ур.)`,
+      result: 'lose',
+      expGained: loserExpGain,
+    };
+    loserHistory.unshift(loserEntry);
+    if (loserHistory.length > 50) loserHistory.pop();
+    await update(ref(db, `users/${loserId}`), { expHistory: loserHistory });
+  }
+
+  return { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain };
+};
 
 const OnlineGameScreen = ({ route, navigation }) => {
   const { gameId, playerKey, myRole } = route.params;
@@ -56,53 +159,53 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const lastBoardRef = useRef(null);
   const lastMoveWasMineRef = useRef(false);
 
-  const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrender = false) => {
-    if (isGameEnding.current) return;
-    isGameEnding.current = true;
+const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrender = false) => {
+  if (isGameEnding.current) return;
+  isGameEnding.current = true;
 
-    let expGained = 0;
-    let oldExp = 0;
-    const isWin = winnerId === playerKey;
+  let expGained = 0;
+  let oldExp = 0;
+  const isWin = winnerId === playerKey;
 
-    if (winnerId && loserId) {
-      try {
-        const { winnerOldExp, loserOldExp, winnerExpGain } = await updateStats(winnerId, loserId, isSurrender);
-        if (isWin) {
-          expGained = winnerExpGain;
-          oldExp = winnerOldExp;
-        } else {
-          expGained = 0;
-          oldExp = loserOldExp;
-        }
-      } catch (err) {
-        console.error('Ошибка обновления статистики:', err);
+  if (winnerId && loserId) {
+    try {
+      const { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain } = await updateStats(winnerId, loserId, isSurrender);
+      if (isWin) {
+        expGained = winnerExpGain;
+        oldExp = winnerOldExp;
+      } else {
+        expGained = loserExpGain;
+        oldExp = loserOldExp;
       }
-
-      try {
-        await update(ref(db, `games_checkers/${gameId}`), {
-          status: 'finished',
-          winner: winnerId,
-          loser: loserId,
-          surrendered: isSurrender ? loserId : null,
-          finishedAt: Date.now(),
-        });
-      } catch (err) {
-        console.error('Ошибка обновления статуса игры:', err);
-      }
+    } catch (err) {
+      console.error('Ошибка обновления статистики:', err);
     }
 
-    // Обновляем прогресс ежедневных заданий
-    console.log('📋 Обновление прогресса заданий:', { isWin, gameType: gameData?.gameType });
+    try {
+      await update(ref(db, `games_checkers/${gameId}`), {
+        status: 'finished',
+        winner: winnerId,
+        loser: loserId,
+        surrendered: isSurrender ? loserId : null,
+        finishedAt: Date.now(),
+      });
+    } catch (err) {
+      console.error('Ошибка обновления статуса игры:', err);
+    }
+  }
+
+  // ☆☆☆ Обновление заданий – пропускаем для сдавшегося ☆☆☆
+  if (!(isSurrender && !isWin)) {
+    console.log('📋 Обновление прогресса заданий для игрока:', isWin ? 'победитель' : 'проигравший (не сдался)');
 
     if (isWin) {
-      // Победа
       await updateProgress(TASK_TYPES.WIN_GAMES, 1);
       await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
       if (gameData?.gameType === 'giveaway') {
         await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, 'giveaway');
       }
     }
-    // Сыгранная игра (независимо от результата)
+    // Сыгранная игра (независимо от результата, но только если не сдался)
     await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
     await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
     await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
@@ -110,17 +213,18 @@ const OnlineGameScreen = ({ route, navigation }) => {
       await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
     }
 
-    // Подсчёт съеденных шашек
+    // Подсчёт съеденных шашек (только если не сдался)
     const myCaptured = myRole === 1 ? captured.black : captured.white;
     if (myCaptured > 0) {
       await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
     }
+  } else {
+    console.log('⏭️ Пропускаем задания для проигравшего (сдался/ушёл)');
+  }
 
-    console.log('✅ Прогресс заданий обновлён');
-
-    setVictoryData({ isWin, expGained, oldExp, opponentLeft: false });
-    setVictoryModalVisible(true);
-  };
+  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin });
+  setVictoryModalVisible(true);
+};
 
   const handleVictoryClose = async () => {
     setVictoryModalVisible(false);
@@ -150,9 +254,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
     setBoard(finalBoard);
     setAnimatingMove(null);
     isAnimatingRef.current = false;
-    
     lastBoardRef.current = finalBoard;
-    
     console.log('✅ Анимация завершена, isAnimatingRef:', isAnimatingRef.current);
 
     if (furtherCaptures.length > 0 && wasCapture) {
@@ -174,6 +276,10 @@ const OnlineGameScreen = ({ route, navigation }) => {
       console.error('❌ Ошибка: gameData отсутствует');
       return;
     }
+    if (gameData.currentPlayer !== playerKey) {
+      console.warn('⚠️ Попытка хода не в свой ход');
+      return;
+    }
 
     setSelectedCell(null);
     setValidMoves([]);
@@ -186,29 +292,27 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
 
     const willBeKing = (!piece.king && ((piece.player === 1 && move.toRow === 7) || (piece.player === 2 && move.toRow === 0)));
-    const newKing = piece.king ? true : willBeKing;
-
     newBoard[move.fromRow][move.fromCol] = null;
     newBoard[move.toRow][move.toCol] = piece;
-
     if (move.capturedRow !== undefined && move.capturedCol !== undefined) {
       newBoard[move.capturedRow][move.capturedCol] = null;
     }
-
     if (willBeKing) {
       newBoard[move.toRow][move.toCol].king = true;
     }
 
-    const furtherCaptures = getCaptureMoves(newBoard, move.toRow, move.toCol, myRole);
+    const furtherCaptures = getCaptureMoves(newBoard, move.toRow, move.toCol, piece.player);
     const wasCapture = move.capturedRow !== undefined && move.capturedCol !== undefined;
 
     let nextPlayer = null;
-    if (!(furtherCaptures.length > 0 && wasCapture)) {
-      nextPlayer = Object.keys(gameData.players).find(p => p !== playerKey);
-    } else {
+    if (furtherCaptures.length > 0 && wasCapture) {
       nextPlayer = playerKey;
+    } else {
+      const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+      nextPlayer = opponentId;
     }
 
+    console.log('🎯 Вычислен следующий игрок:', nextPlayer);
     const currentCaptured = captured || { white: 0, black: 0 };
     const newCaptured = { ...currentCaptured };
     if (wasCapture) {
@@ -223,29 +327,25 @@ const OnlineGameScreen = ({ route, navigation }) => {
     };
 
     lastMoveWasMineRef.current = true;
-    console.log('🎯 Мой ход отправляется в Firebase');
-
-    update(ref(db, 'games_checkers/' + gameId), updates).catch(err => 
-      console.error('Ошибка отправки хода:', err)
-    );
+    update(ref(db, 'games_checkers/' + gameId), updates)
+      .then(() => {
+        setTimeout(() => { lastMoveWasMineRef.current = false; }, 500);
+      })
+      .catch(err => console.error('Ошибка отправки хода:', err));
 
     setPendingBoard(newBoard);
     setPendingMove({ move, wasCapture, furtherCaptures, willBeKing, nextPlayer });
-
     setAnimatingMove({
       from: { row: move.fromRow, col: move.fromCol },
       to: { row: move.toRow, col: move.toCol },
-      piece: { ...piece, king: newKing },
+      piece: { ...piece, king: willBeKing },
       wasCapture: wasCapture,
     });
     isAnimatingRef.current = true;
 
-    console.log('🎬 Анимация ВАШЕГО хода запущена');
-
     const opponentPlayer = myRole === 1 ? 2 : 1;
     const opponentHasMoves = hasMoves(newBoard, opponentPlayer);
     const currentPlayerHasMoves = hasMoves(newBoard, myRole);
-
     if (!opponentHasMoves) {
       const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
       endGame('Вы выиграли!', playerKey, opponentId);
@@ -290,43 +390,28 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
   }, [gameData, playerKey]);
 
-  // Исправленный useEffect для подписки на Firebase
   useEffect(() => {
     const gameRef = ref(db, 'games_checkers/' + gameId);
     const unsubscribe = onValue(gameRef, async (snapshot) => {
       const data = snapshot.val();
-
-      if (currentGameIdRef.current !== gameId) {
-        console.log('⚠️ Stale listener для gameId:', gameId);
-        return;
-      }
-
+      if (currentGameIdRef.current !== gameId) return;
       if (!data) {
-        if (!isInitialized.current) {
-          console.log('⏳ Ожидание создания игры...');
-          return;
-        }
+        if (!isInitialized.current) return;
         if (!isGameEnding.current && !isCleanupDone.current) {
-          console.log('⚠️ Игра удалена из Firebase до завершения, игнорирую.');
+          console.log('⚠️ Игра удалена');
           isCleanupDone.current = true;
         }
         return;
       }
-
       if (!isInitialized.current) isInitialized.current = true;
-
-      // Проверяем, сдался ли противник
       if (data.status === 'finished' && !isGameEnding.current) {
         console.log('🏁 Игра завершена на сервере');
         isGameEnding.current = true;
-
         const isWin = data.winner === playerKey;
         let expGained = 0;
         let oldExp = 0;
         let opponentLeft = false;
-
         if (data.surrendered) {
-          console.log('🚪 Противник сдался');
           opponentLeft = true;
           if (isWin) {
             const myStatsRef = ref(db, `users/${playerKey}/stats`);
@@ -336,93 +421,55 @@ const OnlineGameScreen = ({ route, navigation }) => {
             expGained = EXP_REWARDS.WIN_ONLINE;
           }
         }
-
         setVictoryData({ isWin, expGained, oldExp, opponentLeft });
         setVictoryModalVisible(true);
         return;
       }
-
-      if (!data.board || !Array.isArray(data.board)) {
-        console.log('⏳ Доска ещё не создана или некорректна, жду...');
-        return;
-      }
-
+      if (!data.board) return;
       setGameData(data);
       setCaptured(data.captured || { white: 0, black: 0 });
-
       const newBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
       for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
           if (data.board[r] && data.board[r][c]) newBoard[r][c] = data.board[r][c];
         }
       }
-
       const boardToCompare = lastBoardRef.current || newBoard;
       const hasChanged = lastBoardRef.current ? JSON.stringify(boardToCompare) !== JSON.stringify(newBoard) : false;
-
       const wasMyLastMove = lastMoveWasMineRef.current;
 
-      console.log('📊 Firebase update:', {
-        hasChanged,
-        isAnimating: isAnimatingRef.current,
-        wasMyLastMove,
-        hasLastBoard: !!lastBoardRef.current,
-        currentPlayer: data.currentPlayer,
-        myKey: playerKey
-      });
-
-      // ★★★ ИСПРАВЛЕНИЕ: убрано условие data.currentPlayer !== playerKey ★★★
       if (hasChanged && !isAnimatingRef.current && !wasMyLastMove && lastBoardRef.current) {
-        console.log('🎬 Запуск анимации хода соперника...');
-
-        // Сбрасываем состояние анимации перед началом
+        console.log('🎬 Анимация хода соперника');
         setAnimatingMove(null);
-
         let from = null, to = null, movedPiece = null;
         let capturedPositions = [];
-
-        // Сначала находим все изменения
         for (let r = 0; r < BOARD_SIZE; r++) {
           for (let c = 0; c < BOARD_SIZE; c++) {
             const oldPiece = boardToCompare[r]?.[c];
             const newPiece = newBoard[r][c];
-
-            // Шашка исчезла
             if (oldPiece && !newPiece) {
-              // Определяем, это исходная позиция или съеденная шашка
               if (oldPiece.player !== myRole) {
-                // Это шашка противника - исходная позиция
                 from = { row: r, col: c };
                 movedPiece = oldPiece;
               } else {
-                // Это моя шашка - была съедена
                 capturedPositions.push({ row: r, col: c });
               }
-            }
-            // Шашка появилась
-            else if (!oldPiece && newPiece) {
+            } else if (!oldPiece && newPiece) {
               to = { row: r, col: c };
             }
           }
         }
-
         if (from && to && movedPiece) {
           const isOpponentMove = movedPiece.player !== myRole;
-
-          console.log('📍 Найдено:', { from, to, movedPiece, isOpponentMove, capturedPositions });
-
           if (isOpponentMove) {
-            let wasCapture = capturedPositions.length > 0;
-            let capturedRow = wasCapture ? capturedPositions[0].row : null;
-            let capturedCol = wasCapture ? capturedPositions[0].col : null;
-
+            const wasCapture = capturedPositions.length > 0;
+            const capturedRow = wasCapture ? capturedPositions[0].row : null;
+            const capturedCol = wasCapture ? capturedPositions[0].col : null;
             const willBeKing = (!movedPiece.king && ((movedPiece.player === 1 && to.row === 7) || (movedPiece.player === 2 && to.row === 0)));
             const newKing = movedPiece.king ? true : willBeKing;
-
             const tempBoard = newBoard.map(r => [...r]);
             if (willBeKing) tempBoard[to.row][to.col].king = true;
             const furtherCaptures = getCaptureMoves(tempBoard, to.row, to.col, movedPiece.player);
-
             setPendingBoard(newBoard);
             setPendingMove({
               move: { fromRow: from.row, fromCol: from.col, toRow: to.row, toCol: to.col, capturedRow, capturedCol },
@@ -433,44 +480,29 @@ const OnlineGameScreen = ({ route, navigation }) => {
             });
             setAnimatingMove({ from, to, piece: { ...movedPiece, king: newKing }, wasCapture });
             isAnimatingRef.current = true;
-            console.log('✅ Анимация соперника запущена');
           } else {
-            console.log('⚠️ Это был мой ход (уже анимирован), просто обновляем доску');
             setBoard(newBoard);
           }
         } else {
-          console.log('⚠️ Не удалось определить ход соперника');
           setBoard(newBoard);
         }
       } else if (hasChanged) {
-        console.log('📊 Обновление доски (ваш ход или анимация идёт)');
         setBoard(newBoard);
       }
-
       lastBoardRef.current = newBoard;
-      lastMoveWasMineRef.current = false;
-      
-      console.log('💾 lastBoardRef сохранён, hasLastBoard:', !!lastBoardRef.current);
-
+      if (!wasMyLastMove) lastMoveWasMineRef.current = false;
       setLoading(false);
       if (data.currentPlayer !== playerKey) {
         setSelectedCell(null);
         setValidMoves([]);
       }
     });
-
-    return () => {
-      console.log('🧹 OnlineGameScreen размонтирован');
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [gameId, playerKey, myRole]);
 
   useFocusEffect(
     useCallback(() => {
-      const onBackPress = () => {
-        handleGiveUp();
-        return true;
-      };
+      const onBackPress = () => { handleGiveUp(); return true; };
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
     }, [gameData, playerKey])
@@ -478,10 +510,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
   const handleSelectCell = (row, col) => {
     if (!gameData || gameData.currentPlayer !== playerKey || animatingMove || isAnimatingRef.current) return;
-
     const isPlayableCell = (row + col) % 2 === 1;
     if (!isPlayableCell) return;
-
     if (currentPiecePos) {
       if (row === currentPiecePos.row && col === currentPiecePos.col) return;
       const move = validMoves.find(m => m.row === row && m.col === col);
@@ -497,10 +527,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
       }
       return;
     }
-
     const piece = board[row][col];
     const anyCapture = hasAnyCapture(board, myRole);
-
     if (piece && piece.player === myRole) {
       if (selectedCell && selectedCell.row === row && selectedCell.col === col) return;
       setSelectedCell({ row, col });
@@ -508,7 +536,6 @@ const OnlineGameScreen = ({ route, navigation }) => {
       setValidMoves(moves);
       return;
     }
-
     if (selectedCell) {
       const move = validMoves.find(m => m.row === row && m.col === col);
       if (move) {
@@ -524,107 +551,32 @@ const OnlineGameScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleGiveUp = async () => {
-    Alert.alert(
-      'Сдаться',
-      'Вы уверены? Сопернику будет засчитана победа.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Сдаться',
-          style: 'destructive',
-          onPress: async () => {
-            if (!gameData || !gameData.players) {
-              console.error('❌ gameData не загружен');
-              navigation.replace('Menu');
-              return;
-            }
-
-            isGameEnding.current = true;
-            const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
-
-            if (opponentId) {
-              try {
-                // Обновляем статистику противника (победа)
-                const opponentRef = ref(db, `users/${opponentId}/stats`);
-                const opponentSnap = await get(opponentRef);
-                const opponentStats = opponentSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
-                const opponentOldExp = opponentStats.exp || 0;
-                const opponentExpGain = EXP_REWARDS.WIN_ONLINE;
-
-                await update(opponentRef, {
-                  totalGames: opponentStats.totalGames + 1,
-                  wins: opponentStats.wins + 1,
-                  exp: opponentOldExp + opponentExpGain,
-                });
-
-                // Добавляем запись в историю противника
-                const opponentUserSnap = await get(ref(db, `users/${opponentId}`));
-                const opponentUserData = opponentUserSnap.val() || {};
-                const opponentHistory = opponentUserData.expHistory || [];
-                const opponentEntry = {
-                  timestamp: Date.now(),
-                  gameType: gameData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
-                  opponent: `${myName || 'Игрок'} (${myLevel} ур.)`,
-                  result: 'opponent_left',
-                  expGained: opponentExpGain,
-                };
-                opponentHistory.unshift(opponentEntry);
-                if (opponentHistory.length > 50) opponentHistory.pop();
-                await update(ref(db, `users/${opponentId}`), { expHistory: opponentHistory });
-
-                // Обновляем статистику игрока (поражение)
-                const playerRef = ref(db, `users/${playerKey}/stats`);
-                const playerSnap = await get(playerRef);
-                const playerStats = playerSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
-                const playerOldExp = playerStats.exp || 0;
-                const playerExpGain = EXP_REWARDS.LOSE_ONLINE;
-
-                await update(playerRef, {
-                  totalGames: playerStats.totalGames + 1,
-                  exp: playerOldExp + playerExpGain,
-                });
-
-                // Добавляем запись в историю игрока
-                const playerUserSnap = await get(ref(db, `users/${playerKey}`));
-                const playerUserData = playerUserSnap.val() || {};
-                const playerHistory = playerUserData.expHistory || [];
-                const playerEntry = {
-                  timestamp: Date.now(),
-                  gameType: gameData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
-                  opponent: `${opponentName || 'Соперник'} (${opponentLevel} ур.)`,
-                  result: 'lose',
-                  expGained: playerExpGain,
-                };
-                playerHistory.unshift(playerEntry);
-                if (playerHistory.length > 50) playerHistory.pop();
-                await update(ref(db, `users/${playerKey}`), { expHistory: playerHistory });
-
-                // Помечаем игру как завершенную с информацией о сдаче
-                await update(ref(db, `games_checkers/${gameId}`), {
-                  status: 'finished',
-                  winner: opponentId,
-                  surrendered: playerKey,
-                  finishedAt: Date.now(),
-                });
-
-              } catch (err) {
-                console.error('Ошибка обновления статистики:', err);
-              }
-            }
-
-            // Удаляем игру
-            if (!isCleanupDone.current) {
-              isCleanupDone.current = true;
-              await remove(ref(db, `games_checkers/${gameId}`));
-            }
-
+const handleGiveUp = async () => {
+  Alert.alert(
+    'Сдаться',
+    'Вы уверены? Сопернику будет засчитана победа.',
+    [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Сдаться',
+        style: 'destructive',
+        onPress: async () => {
+          if (!gameData || !gameData.players) {
             navigation.replace('Menu');
-          },
+            return;
+          }
+          const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+          if (opponentId) {
+            // Вызываем endGame для регистрации победы соперника с флагом surrender
+            await endGame('Вы сдались', opponentId, playerKey, true);
+          } else {
+            navigation.replace('Menu');
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
   if (loading) {
     return (
@@ -654,14 +606,12 @@ const OnlineGameScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Режим игры вверху */}
       <View style={styles.header}>
         <View style={styles.gameTypeIndicator}>
           <Text style={styles.gameTypeText}>{gameTypeName}</Text>
         </View>
       </View>
 
-      {/* Инфо о противнике с индикатором хода */}
       <View style={styles.opponentInfo}>
         <Text style={styles.opponentAvatar}>{opponentAvatar || '😎'}</Text>
         <View style={styles.opponentDetails}>
@@ -677,16 +627,9 @@ const OnlineGameScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {/* Съеденные шашки противника (сверху) - противник съел мои шашки */}
       <View style={styles.capturedRow}>
         {Array.from({ length: opponentCaptured }).map((_, index) => (
-          <View
-            key={`opponent-${index}`}
-            style={[
-              styles.capturedPiece,
-              { backgroundColor: myPieceColor, borderColor: myPieceColor }
-            ]}
-          />
+          <View key={`opponent-${index}`} style={[styles.capturedPiece, { backgroundColor: myPieceColor, borderColor: myPieceColor }]} />
         ))}
       </View>
 
@@ -701,16 +644,9 @@ const OnlineGameScreen = ({ route, navigation }) => {
         onAnimationFinish={onAnimationFinish}
       />
 
-      {/* Съеденные шашки игрока (снизу) - я съел шашки противника */}
       <View style={styles.capturedRow}>
         {Array.from({ length: myCaptured }).map((_, index) => (
-          <View
-            key={`player-${index}`}
-            style={[
-              styles.capturedPiece,
-              { backgroundColor: opponentPieceColor, borderColor: opponentPieceColor }
-            ]}
-          />
+          <View key={`player-${index}`} style={[styles.capturedPiece, { backgroundColor: opponentPieceColor, borderColor: opponentPieceColor }]} />
         ))}
       </View>
 
@@ -729,7 +665,6 @@ const OnlineGameScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {/* Кнопка сдаться */}
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
@@ -748,118 +683,24 @@ const OnlineGameScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a2a3a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    position: 'absolute',
-    top: 50,
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  gameTypeIndicator: {
-    backgroundColor: '#2c3e50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  gameTypeText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#4ECDC4',
-  },
-  capturedRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    marginVertical: 10,
-    maxWidth: 380,
-    minHeight: 50,
-    zIndex: 1,
-  },
-  capturedPiece: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginHorizontal: 3,
-    marginVertical: 3,
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  opponentInfo: {
-    position: 'absolute',
-    top: 110,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2c3e50',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 25,
-    zIndex: 5,
-  },
+  container: { flex: 1, backgroundColor: '#1a2a3a', alignItems: 'center', justifyContent: 'center' },
+  header: { position: 'absolute', top: 50, alignItems: 'center', zIndex: 10 },
+  gameTypeIndicator: { backgroundColor: '#2c3e50', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  gameTypeText: { fontSize: 15, fontWeight: '600', color: '#4ECDC4' },
+  capturedRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, marginVertical: 10, maxWidth: 380, minHeight: 50, zIndex: 1 },
+  capturedPiece: { width: 28, height: 28, borderRadius: 14, marginHorizontal: 3, marginVertical: 3, borderWidth: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 3 },
+  opponentInfo: { position: 'absolute', top: 110, flexDirection: 'row', alignItems: 'center', backgroundColor: '#2c3e50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25, zIndex: 5 },
   opponentAvatar: { fontSize: 24, marginRight: 8 },
   opponentName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },
-  opponentDetails: {
-    flexDirection: 'column',
-    marginRight: 10,
-  },
-  playerInfo: {
-    position: 'absolute',
-    bottom: 90,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2c3e50',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 25,
-    zIndex: 10,
-  },
+  opponentDetails: { flexDirection: 'column', marginRight: 10 },
+  playerInfo: { position: 'absolute', bottom: 90, flexDirection: 'row', alignItems: 'center', backgroundColor: '#2c3e50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25, zIndex: 10 },
   playerAvatar: { fontSize: 24, marginRight: 8 },
   playerName: { fontSize: 14, color: colors.textLight, fontWeight: '600' },
-  playerDetails: {
-    flexDirection: 'column',
-    marginRight: 10,
-  },
-  levelBadge: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  turnBadge: {
-    backgroundColor: '#4ECDC4',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginLeft: 8,
-  },
-  turnBadgeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  giveUpButton: {
-    position: 'absolute',
-    bottom: 30,
-    backgroundColor: '#FF6B6B',
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 10,
-  },
+  playerDetails: { flexDirection: 'column', marginRight: 10 },
+  levelBadge: { fontSize: 11, fontWeight: 'bold', marginTop: 2 },
+  turnBadge: { backgroundColor: '#4ECDC4', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 15, marginLeft: 8 },
+  turnBadgeText: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
+  giveUpButton: { position: 'absolute', bottom: 30, backgroundColor: '#FF6B6B', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5, zIndex: 10 },
   giveUpText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   status: { color: colors.textLight, fontSize: 18 },
 });

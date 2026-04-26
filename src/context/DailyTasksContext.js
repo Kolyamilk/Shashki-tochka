@@ -84,7 +84,7 @@ export const DailyTasksProvider = ({ children }) => {
     const nowTimestamp = Date.now();
 
     // Генерируем новые задания (используем timestamp как seed для разнообразия)
-    let newTasks = generateDailyTasks(today, nowTimestamp);
+    let newTasks = generateDailyTasks(today, nowTimestamp, userId);
 
     // Избегаем полного повторения ID (если вдруг совпали с текущими)
     if (tasks.length > 0) {
@@ -145,7 +145,7 @@ export const DailyTasksProvider = ({ children }) => {
         // Если нет данных или сменился день (или версия устарела)
         if (!data || shouldUpdateTasks(data.lastUpdateDate) || data.version !== DAILY_TASKS_VERSION) {
           console.log('🆕 Генерация новых заданий (новый день или версия)');
-          const newTasks = generateDailyTasks(today);
+          const newTasks = generateDailyTasks(today, null, userId);
           await update(ref(db, `users/${userId}`), {
             dailyTasks: {
               tasks: newTasks,

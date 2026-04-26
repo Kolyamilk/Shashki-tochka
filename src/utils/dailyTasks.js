@@ -229,8 +229,8 @@ export const getTodayDate = () => {
 };
 
 // Генерация 3 случайных заданий на день
-export const generateDailyTasks = (date = getTodayDate(), seedOverride = null) => {
-  const seedInput = seedOverride !== null ? `${date}:${seedOverride}` : date;
+export const generateDailyTasks = (date = getTodayDate(), seedOverride = null, userId = null) => {
+  const seedInput = seedOverride !== null ? `${date}:${seedOverride}` : userId ? `${date}:${userId}` : date;
   const seed = getSeedHash(seedInput);
   const shuffled = shuffleWithSeed(TASK_TEMPLATES, seed);
 
