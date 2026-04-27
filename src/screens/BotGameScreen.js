@@ -294,7 +294,6 @@ const BotGameScreen = ({ route, navigation }) => {
       finishedAt: Date.now(),
       result: winner === 1 ? 'player_win' : (winner === 2 ? 'bot_win' : 'draw'),
     }).catch(console.error);
-    console.log('📝 Обновлён статус игры в bot_games');
       }
 
       // Показываем модальное окно победы
@@ -473,15 +472,12 @@ const BotGameScreen = ({ route, navigation }) => {
           }
         } else {
           // ← ← ← Обычный ход бота
-          console.log('🤖 Бот ищет лучший ход...');
           move = getBestMove(board, 2, difficulty, gameType);
         }
 
         if (move) {
-          console.log('🤖 Бот делает ход:', move);
           applyMove(move);
         } else {
-          console.log('🤖 У бота нет ходов – передаём ход игроку');
           setCurrentPlayer(1);
           setCurrentPiecePos(null);
           isBotThinkingRef.current = false;
@@ -515,7 +511,6 @@ const BotGameScreen = ({ route, navigation }) => {
 
       // Если прошло больше 2 минут и сейчас ход игрока
       if (timeSinceLastMove >= TWO_MINUTES && currentPlayer === 1) {
-        console.log('⏰ Таймаут бездействия игрока - автоматическая сдача');
         endGame('Вы не сделали ход вовремя', 2, true);
       }
     };
@@ -528,9 +523,7 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const handleSelectCell = (row, col) => {
     if (currentPlayer !== 1 || gameOver || botThinking || animatingMove || isAnimatingRef.current) {
-      console.log('⚠️ Ход заблокирован:', {
-        currentPlayer,
-        gameOver,
+      return;
         botThinking,
         animatingMove: !!animatingMove,
         isAnimating: isAnimatingRef.current

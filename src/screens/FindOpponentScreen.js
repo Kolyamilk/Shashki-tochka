@@ -69,7 +69,6 @@ const FindOpponentScreen = ({ navigation }) => {
 
   const handleFactRating = (isLike) => {
     setFactRated(true);
-    console.log(`📊 Факт оценен: ${isLike ? '👍' : '👎'}`);
     // Здесь можно добавить отправку оценки в Firebase для аналитики
   };
 
@@ -136,7 +135,6 @@ const FindOpponentScreen = ({ navigation }) => {
       const key = newPlayerRef.key;
       currentPlayerKey.current = key;
       await set(newPlayerRef, { userId, timestamp: Date.now(), gameType: gameType || 'russian' });
-      console.log('✅ Заявка создана в waiting_checkers:', key, 'режим:', gameType);
 
       // ---------- 1. Слушаем waiting_checkers ----------
       const handleWaiting = (snapshot) => {
@@ -158,7 +156,6 @@ const FindOpponentScreen = ({ navigation }) => {
                 // Удаляем заявки немедленно
                 remove(ref(db, 'waiting_checkers/' + key1));
                 remove(ref(db, 'waiting_checkers/' + key2));
-                console.log('🗑️ Заявки удалены из очереди:', key1, key2);
 
                 const gameId = `checkers_${key1}_${key2}`;
                 const gameRef = ref(db, 'games_checkers/' + gameId);
@@ -179,7 +176,6 @@ const FindOpponentScreen = ({ navigation }) => {
                     gameCreatedRef.current = true;
                     const myUserId = userIdRef.current;
                     const myRole = data1.userId === myUserId ? 1 : 2;
-                    console.log('🚀 Переход в игру:', { gameId, myRole, gameType: data1.gameType });
                     if (timeoutId.current) clearTimeout(timeoutId.current);
                     navigation.replace('OnlineGame', { gameId, playerKey: myUserId, myRole });
                   }
@@ -206,11 +202,9 @@ const FindOpponentScreen = ({ navigation }) => {
         const myUserId = userIdRef.current;
         for (const [gid, game] of Object.entries(games)) {
           if (game.players && game.players[myUserId] && game.status === 'active') {
-            console.log('✅ Найдена активная игра в games_checkers:', gid);
             gameCreatedRef.current = true;
             if (currentPlayerKey.current) {
               remove(ref(db, 'waiting_checkers/' + currentPlayerKey.current));
-              console.log('🗑️ Удалена заявка из waiting_checkers:', currentPlayerKey.current);
             }
             if (timeoutId.current) clearTimeout(timeoutId.current);
             const myRole = game.players[myUserId];
@@ -223,7 +217,6 @@ const FindOpponentScreen = ({ navigation }) => {
 
       timeoutId.current = setTimeout(() => {
         if (isMounted.current && !gameCreatedRef.current) {
-          console.log('⏰ Таймаут поиска - начинаем игру с ботом');
           if (currentPlayerKey.current) {
             remove(ref(db, 'waiting_checkers/' + currentPlayerKey.current));
           }
@@ -233,8 +226,6 @@ const FindOpponentScreen = ({ navigation }) => {
           const botName = generateRandomBotName();
           const botLevel = generateRandomLevel();
           const botAvatar = generateRandomAvatar();
-
-          console.log('🤖 Создаём игру с ботом:', { botName, botLevel, botAvatar });
 
           // Переходим на экран игры с ботом, передавая имя, уровень и аватарку
           navigation.replace('BotGame', {

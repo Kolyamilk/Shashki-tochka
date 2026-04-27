@@ -249,11 +249,8 @@ export const shouldUpdateTasks = (lastUpdateDate) => {
 
 // Обновление прогресса задания
 export const updateTaskProgress = (tasks, taskType, increment = 1, gameType = null) => {
-  console.log('🔄 updateTaskProgress:', { taskType, increment, gameType, tasksCount: tasks.length });
-
   return tasks.map((task, index) => {
     if (task.completed) {
-      console.log(`  Задание ${index} (${task.type}): уже выполнено, пропуск`);
       return task;
     }
 
@@ -264,13 +261,9 @@ export const updateTaskProgress = (tasks, taskType, increment = 1, gameType = nu
       // Для заданий с режимом игры проверяем gameType
       if (taskType === TASK_TYPES.WIN_GIVEAWAY || taskType === TASK_TYPES.PLAY_GIVEAWAY) {
         shouldUpdate = gameType === 'giveaway';
-        console.log(`  Задание ${index} (${task.type}): проверка gameType - ${gameType} === 'giveaway' = ${shouldUpdate}`);
       } else {
         shouldUpdate = true;
-        console.log(`  Задание ${index} (${task.type}): совпадение типа, обновляем`);
       }
-    } else {
-      console.log(`  Задание ${index} (${task.type}): тип не совпадает с ${taskType}`);
     }
 
     if (shouldUpdate) {
@@ -279,10 +272,8 @@ export const updateTaskProgress = (tasks, taskType, increment = 1, gameType = nu
       // Для WIN_STREAK используем текущее значение серии, а не инкремент
       if (taskType === TASK_TYPES.WIN_STREAK) {
         newProgress = Math.min(increment, task.target);
-        console.log(`  ✅ Обновление серии: ${increment} / ${task.target}`);
       } else {
         newProgress = Math.min(task.progress + increment, task.target);
-        console.log(`  ✅ Обновление: ${task.progress} + ${increment} = ${newProgress} / ${task.target}`);
       }
 
       return {

@@ -23,7 +23,6 @@ export const AuthProvider = ({ children }) => {
     if (userId) {
       const userStatusRef = ref(db, `status/${userId}`);
       set(userStatusRef, { online: true, lastSeen: Date.now() })
-        .then(() => console.log('✅ Статус установлен для', userId))
         .catch(err => console.error('Ошибка установки статуса:', err));
       onDisconnect(userStatusRef).set({ online: false, lastSeen: Date.now() });
     }

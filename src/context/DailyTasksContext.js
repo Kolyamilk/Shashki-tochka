@@ -176,6 +176,27 @@ export const DailyTasksProvider = ({ children }) => {
     loadTasks();
   }, [userId]);
 
+  // Периодическое обновление уровня пользователя
+  useEffect(() => {
+    if (!userId) return;
+
+    const updateUserLevel = async () => {
+      try {
+        const statsRef = ref(db, `users/${userId}/stats`);
+        const statsSnap = await get(statsRef);
+        const stats = statsSnap.val() || { exp: 0 };
+        const levelInfo = getLevelFromExp(stats.exp || 0);
+        setUserLevel(levelInfo.level);
+      } catch (error) {
+        console.error('Ошибка обновления уровня:', error);
+      }
+    };
+
+    // Обновляем уровень каждые 5 секунд
+    const interval = setInterval(updateUserLevel, 5000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
   // Обработка награды за выполненное задание (без изменений)
   useEffect(() => {
     if (!pendingReward || !userId) return;

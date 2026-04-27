@@ -649,6 +649,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       if (data.currentPlayer !== playerKey) {
         setSelectedCell(null);
         setValidMoves([]);
+        setCurrentPiecePos(null);
       } else {
         // Мой ход - обновляем время последнего хода
         lastMoveTimeRef.current = Date.now();

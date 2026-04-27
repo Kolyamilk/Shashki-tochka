@@ -10,14 +10,11 @@ class SoundManager {
   async playMoveSound() {
     if (!this.enabled) return;
     // В будущем здесь можно добавить реальные звуки
-    // Пока просто логируем
-    console.log('🔊 Звук хода');
   }
 
   // Звук взятия (пока заглушка)
   async playCaptureSound() {
     if (!this.enabled) return;
-    console.log('🔊 Звук взятия');
   }
 
   setEnabled(enabled) {
@@ -33,5 +30,4 @@ export const soundManager = new SoundManager();
 
 // Инициализация (пока ничего не делает)
 export const initSounds = async () => {
-  console.log('🔊 Звуковая система инициализирована (заглушка)');
 };
