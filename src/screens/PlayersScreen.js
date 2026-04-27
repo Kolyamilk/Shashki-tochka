@@ -15,9 +15,11 @@ import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';  // ← ← ← Импортируем useAuth
 import { getLevelFromExp, getLevelColor } from '../utils/levelSystem';
+import { useInvite } from '../context/InviteContext';
 
 const PlayersScreen = ({ navigation }) => {
   const { userId } = useAuth();  // ← ← ← Получаем текущий userId
+  const { resetInviteFlags } = useInvite();
   const insets = useSafeAreaInsets();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,10 @@ const PlayersScreen = ({ navigation }) => {
 
   // ← Загружаем список всех пользователей (исключая текущего)
   useEffect(() => {
+    // Пересоздаём подписку на приглашения при входе на экран
+    console.log('🔄 PlayersScreen: пересоздаём подписку на приглашения');
+    resetInviteFlags();
+
     const fetchUsers = async () => {
       try {
         const usersRef = ref(db, 'users');

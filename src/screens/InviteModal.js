@@ -1,24 +1,54 @@
-// src/components/InviteModal.js
+// src/screens/InviteModal.js
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { colors } from '../styles/globalStyles';
+import { getLevelColor } from '../utils/levelSystem';
 
-const InviteModal = ({ visible, onClose, onAccept, onDecline, fromName, fromAvatar }) => {
+const InviteModal = ({ visible, onClose, onAccept, onDecline, fromName, fromAvatar, fromLevel, gameType }) => {
+  const gameTypeName = gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки';
+  const gameTypeEmoji = gameType === 'giveaway' ? '🎯' : '♟️';
+  const levelColor = getLevelColor(fromLevel || 1);
+
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onDecline}>
       <View style={styles.overlay}>
         <View style={styles.modal}>
-          <Text style={styles.avatar}>{fromAvatar}</Text>
+          {/* Аватар */}
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatar}>{fromAvatar || '😀'}</Text>
+            <View style={[styles.levelBadge, { backgroundColor: levelColor }]}>
+              <Text style={styles.levelText}>⭐ {fromLevel || 1}</Text>
+            </View>
+          </View>
+
+          {/* Заголовок */}
           <Text style={styles.title}>🎮 Приглашение в игру</Text>
-          <Text style={styles.message}>
-            {fromName} хочет сыграть с вами!
-          </Text>
+
+          {/* Имя игрока */}
+          <Text style={styles.playerName}>{fromName || 'Игрок'}</Text>
+          <Text style={styles.message}>приглашает вас сыграть!</Text>
+
+          {/* Тип игры */}
+          <View style={styles.gameTypeContainer}>
+            <Text style={styles.gameTypeEmoji}>{gameTypeEmoji}</Text>
+            <Text style={styles.gameTypeName}>{gameTypeName}</Text>
+          </View>
+
+          {/* Кнопки */}
           <View style={styles.buttons}>
-            <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={onAccept}>
-              <Text style={styles.buttonText}>✅ Сыграть</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.declineButton]} onPress={onDecline}>
+            <TouchableOpacity
+              style={[styles.button, styles.declineButton]}
+              onPress={onDecline}
+              activeOpacity={0.8}
+            >
               <Text style={styles.buttonText}>❌ Отказаться</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.acceptButton]}
+              onPress={onAccept}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.buttonText}>✅ Сыграть</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -30,46 +60,99 @@ const InviteModal = ({ visible, onClose, onAccept, onDecline, fromName, fromAvat
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modal: {
-    width: '80%',
-    backgroundColor: colors.background,
-    borderRadius: 20,
-    padding: 20,
+    width: '85%',
+    maxWidth: 400,
+    backgroundColor: '#2c3e50',
+    borderRadius: 24,
+    padding: 30,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 20,
   },
   avatar: {
-    fontSize: 50,
-    marginBottom: 10,
+    fontSize: 80,
+  },
+  levelBadge: {
+    position: 'absolute',
+    bottom: -5,
+    right: -5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#2c3e50',
+  },
+  levelText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 10,
+    color: '#4ECDC4',
+    marginBottom: 12,
+  },
+  playerName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textLight,
+    marginBottom: 8,
   },
   message: {
     fontSize: 16,
-    color: colors.textLight,
+    color: '#8e8e93',
     textAlign: 'center',
     marginBottom: 20,
   },
+  gameTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
+  gameTypeEmoji: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  gameTypeName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4ECDC4',
+  },
   buttons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     width: '100%',
+    gap: 12,
   },
   button: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 30,
-    minWidth: 100,
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 25,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   acceptButton: {
     backgroundColor: '#4ECDC4',

@@ -217,8 +217,8 @@ const LocalGameScreen = ({ navigation }) => {
 
       {/* Игрок 2 */}
       <View style={styles.player2Info}>
-        <Text style={styles.playerAvatar}>⚫</Text>
-        <Text style={styles.playerName}>Игрок 2</Text>
+        <Text style={styles.player2Avatar}>⚫</Text>
+        <Text style={styles.player2Name}>Игрок 2</Text>
         {currentPlayer === 2 && (
           <View style={styles.turnBadge}>
             <Text style={styles.turnBadgeText}>⚡ Ход</Text>
@@ -316,6 +316,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 25,
     zIndex: 5,
+    transform: [{ rotate: '180deg' }],
   },
   player1Info: {
     position: 'absolute',
@@ -327,6 +328,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 25,
     zIndex: 5,
+  },
+  player2Avatar: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  player2Name: {
+    fontSize: 16,
+    color: colors.textLight,
+    fontWeight: '600',
+    marginRight: 10,
   },
   playerAvatar: { fontSize: 24, marginRight: 8 },
   playerName: { fontSize: 16, color: colors.textLight, fontWeight: '600', marginRight: 10 },

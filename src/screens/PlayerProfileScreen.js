@@ -13,11 +13,13 @@ import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { sendPushNotification } from '../utils/notifications';
+import { useInvite } from '../context/InviteContext';
 
 const PlayerProfileScreen = ({ route, navigation }) => {
   const { playerId } = route.params;
   const { userId } = useAuth();
-  
+  const { resetInviteFlags } = useInvite();
+
   const [playerData, setPlayerData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(false);
@@ -76,6 +78,10 @@ const PlayerProfileScreen = ({ route, navigation }) => {
 
   // Получение данных игрока и его статуса
   useEffect(() => {
+    // Пересоздаём подписку при входе на экран
+    console.log('🔄 PlayerProfileScreen: пересоздаём подписку на приглашения');
+    resetInviteFlags();
+
     const fetchPlayerData = async () => {
       try {
         const userRef = ref(db, `users/${playerId}`);
@@ -277,6 +283,10 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       const mySnapshot = await get(myUserRef);
       const myData = mySnapshot.exists() ? mySnapshot.val() : {};
 
+      // Получаем уровень отправителя
+      const { getLevelFromExp } = require('../utils/levelSystem');
+      const myLevel = getLevelFromExp(myData.stats?.exp || 0).level;
+
       // Удаляем старые приглашения между этими игроками
       const invitationsRef = ref(db, 'invitations');
       const snapshot = await get(invitationsRef);
@@ -296,6 +306,7 @@ const PlayerProfileScreen = ({ route, navigation }) => {
         to: playerId,
         fromName: myData.name || 'Игрок',
         fromAvatar: myData.avatar || '😀',
+        fromLevel: myLevel,
         gameType: gameType,
         status: 'pending',
         createdAt: Date.now(),
@@ -325,7 +336,12 @@ const PlayerProfileScreen = ({ route, navigation }) => {
     try {
       await remove(ref(db, `invitations/${sentInviteId}`));
       setSentInviteId(null);
-      Alert.alert('Приглашение отменено');
+
+      // Принудительно пересоздаём подписку на приглашения
+      console.log('🔄 Отменено приглашение, пересоздаём подписку');
+      resetInviteFlags();
+
+      Alert.alert('Приглашение отменено', 'Подписка на приглашения обновлена.');
     } catch (err) {
       console.error(err);
       Alert.alert('Ошибка', 'Не удалось отменить приглашение');

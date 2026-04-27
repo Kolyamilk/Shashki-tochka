@@ -52,7 +52,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const [pendingBoard, setPendingBoard] = useState(null);
   const [pendingMove, setPendingMove] = useState(null);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
-  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false });
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
   const [myLevel, setMyLevel] = useState(1);
   const [myName, setMyName] = useState('Вы');
   const [myAvatar, setMyAvatar] = useState('😀');
@@ -743,6 +743,7 @@ const BotGameScreen = ({ route, navigation }) => {
         oldExp={victoryData.oldExp}
         onClose={handleVictoryClose}
         hasNewGift={victoryData.hasNewGift || false}
+        playerSurrendered={victoryData.playerSurrendered || false}
         navigation={navigation}
       />
     </View>
@@ -762,16 +763,15 @@ const BotGameScreen = ({ route, navigation }) => {
 
   function handleGiveUp() {
     Alert.alert(
-      'Выйти из игры',
-      'Вы уверены, что хотите выйти из игры?',
+      'Сдаться',
+      'Вы уверены, что хотите сдаться?',
       [
         { text: 'Отмена', style: 'cancel' },
         {
-          text: 'Выйти',
+          text: 'Сдаться',
           style: 'destructive',
           onPress: async () => {
-            // Помечаем игру как завершенную без начисления опыта
-            setGameOver(true);
+            // Вызываем endGame с флагом сдачи (победа бота)
             if (gameIdRef.current) {
               try {
                 await update(ref(db, `bot_games/${gameIdRef.current}`), {
@@ -780,11 +780,13 @@ const BotGameScreen = ({ route, navigation }) => {
                   result: 'player_gave_up',
                 });
               } catch (error) {
-                console.error('Ошибка обновления bot_games (возможно нет интернета):', error);
-                // Игнорируем ошибку и всё равно выходим
+                console.error('Ошибка обновления bot_games:', error);
               }
             }
-            navigation.goBack();
+            // Показываем модальное окно с сообщением о сдаче (без начисления опыта)
+            setGameOver(true);
+            setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: true });
+            setVictoryModalVisible(true);
           },
         },
       ]

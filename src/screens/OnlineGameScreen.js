@@ -56,16 +56,21 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   const winnerExpGain = isSurrender ? 150 : EXP_REWARDS.WIN_ONLINE;
   const loserExpGain = isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE;
 
+  const winnerNewExp = winnerOldExp + winnerExpGain;
+  const loserNewExp = loserOldExp + loserExpGain;
+
+  // Обновляем статистику победителя
   await update(winnerRef, {
     totalGames: winnerStats.totalGames + 1,
     wins: winnerStats.wins + 1,
-    exp: winnerOldExp + winnerExpGain,
+    exp: winnerNewExp,
   });
 
+  // Обновляем статистику проигравшего
   await update(loserRef, {
     totalGames: loserStats.totalGames + 1,
     wins: loserStats.wins,
-    exp: loserOldExp + loserExpGain,
+    exp: loserNewExp,
   });
 
   // История для победителя
@@ -87,9 +92,8 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   if (winnerHistory.length > 50) winnerHistory.pop();
 
   const winnerOldLevel = getLevelFromExp(winnerOldExp).level;
-  const winnerNewLevel = getLevelFromExp(winnerOldExp + winnerExpGain).level;
+  const winnerNewLevel = getLevelFromExp(winnerNewExp).level;
   const leveledUp = winnerNewLevel > winnerOldLevel;
-  const updateData = { expHistory: winnerHistory };
   let giftAdded = false;
 
   // Добавляем подарок только если: 1) повысился уровень, 2) новый уровень кратен 5, 3) подарок существует
@@ -102,13 +106,21 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
       const newGifts = winnerUserData.newGifts || [];
       const giftId = `gift_level_${winnerNewLevel}`;
       if (!newGifts.includes(giftId)) {
-        updateData.newGifts = [...newGifts, giftId];
+        await update(ref(db, `users/${winnerId}`), {
+          expHistory: winnerHistory,
+          newGifts: [...newGifts, giftId],
+        });
         giftAdded = true;
         console.log(`🎁 Добавлен подарок за ${winnerNewLevel} уровень`);
+      } else {
+        await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
       }
+    } else {
+      await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
     }
+  } else {
+    await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
   }
-  await update(ref(db, `users/${winnerId}`), updateData);
 
   // История для проигравшего (если не сдался)
   if (!isSurrender) {
@@ -152,7 +164,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [myAvatar, setMyAvatar] = useState('');
   const [myLevel, setMyLevel] = useState(1);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
-  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false });
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false, playerSurrendered: false });
 
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
@@ -272,7 +284,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     console.log('⏭️ Пропускаем задания для проигравшего (сдался/ушёл)');
   }
 
-  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin, hasNewGift });
+  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin, hasNewGift, playerSurrendered: isSurrender && !isWin });
   setVictoryModalVisible(true);
 };
 
@@ -815,6 +827,7 @@ const handleGiveUp = async () => {
         onClose={handleVictoryClose}
         opponentLeft={victoryData.opponentLeft || false}
         hasNewGift={victoryData.hasNewGift || false}
+        playerSurrendered={victoryData.playerSurrendered || false}
         navigation={navigation}
       />
     </View>

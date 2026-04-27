@@ -9,9 +9,11 @@ import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { getLevelFromExp, getRankName, getLevelColor } from '../utils/levelSystem';
 import { useDailyTasks } from '../context/DailyTasksContext';
+import { useInvite } from '../context/InviteContext';
 
 const MenuScreen = ({ navigation }) => {
   const { userId } = useAuth();
+  const { resetInviteFlags } = useInvite();
   const insets = useSafeAreaInsets();
   const { tasks, getCompletedCount } = useDailyTasks();
   const [userData, setUserData] = useState(null);
@@ -82,9 +84,13 @@ const MenuScreen = ({ navigation }) => {
   // Загружаем только при первом фокусе
   useFocusEffect(
     useCallback(() => {
+      // Пересоздаём подписку на приглашения при возврате на главный экран
+      console.log('🔄 MenuScreen: пересоздаём подписку на приглашения');
+      resetInviteFlags();
+
       if (!userData) fetchUserData();
       if (topPlayers.length === 0) fetchTopPlayers();
-    }, [userData, topPlayers.length, fetchUserData, fetchTopPlayers])
+    }, [userData, topPlayers.length, fetchUserData, fetchTopPlayers, resetInviteFlags])
   );
 
   // ← ← ← ИСПРАВЛЕННЫЙ useEffect для подсчета онлайн

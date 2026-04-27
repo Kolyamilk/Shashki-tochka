@@ -8,7 +8,7 @@ import GiftReceivedModal from './GiftReceivedModal';
 import TaskCompletedModal from './TaskCompletedModal';
 import { useDailyTasks } from '../context/DailyTasksContext';
 
-const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation, hasNewGift = false }) => {
+const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation, hasNewGift = false, playerSurrendered = false }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -131,7 +131,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
         >
           {/* Заголовок */}
           <Text style={styles.title}>
-            {opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '💪 Хорошая попытка!')}
+            {playerSurrendered ? '🏳️ Вы решили сдаться' : (opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '💪 Хорошая попытка!'))}
           </Text>
 
           {/* Полученный опыт */}

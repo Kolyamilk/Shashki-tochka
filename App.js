@@ -33,6 +33,7 @@ import GameTypeScreen from './src/screens/GameTypeScreen';
 import { InviteProvider } from './src/context/InviteContext';
 import { DailyTasksProvider } from './src/context/DailyTasksContext';
 import ProfileGiftScreen from './src/screens/ProfileGiftScreen';
+import InviteModal from './src/screens/InviteModal';
 
 const Stack = createNativeStackNavigator();
 
@@ -58,6 +59,8 @@ function AppNavigator() {
   const currentAlertVisible = useRef(false);
   const currentAlertInvId = useRef(null);
   const resetTimerRef = useRef(null);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [currentInvite, setCurrentInvite] = useState(null);
 
   const navigateToGame = useCallback((gameId, playerKey, myRole) => {
     if (!navigationRef.current || !isNavigationReady) {
@@ -124,67 +127,20 @@ function AppNavigator() {
           console.log('📨 Incoming invitation detected for me');
 
           if (!currentAlertVisible.current && !hasShownAlertFor.current.has(invId)) {
-            console.log('✅ Showing invitation alert:', invId);
+            console.log('✅ Showing invitation modal:', invId);
             hasShownAlertFor.current.add(invId);
             currentAlertVisible.current = true;
             currentAlertInvId.current = invId;
 
-            const gameTypeName = invData.gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки';
-            const gameTypeEmoji = invData.gameType === 'giveaway' ? '🎯' : '♟️';
-
-            Alert.alert(
-              'Приглашение в игру',
-              `${invData.fromName || 'Игрок'} приглашает вас сыграть!\n\n${gameTypeEmoji} Режим: ${gameTypeName}`,
-              [
-                {
-                  text: 'Отказаться',
-                  style: 'cancel',
-                  onPress: async () => {
-                    await remove(ref(db, `invitations/${invId}`));
-                    currentAlertVisible.current = false;
-                    currentAlertInvId.current = null;
-                    hasShownAlertFor.current.delete(invId);
-                  }
-                },
-                {
-                  text: 'Принять',
-                  onPress: async () => {
-                    wasAcceptedRef.current = true;
-                    const checkRef = ref(db, `invitations/${invId}`);
-                    const checkSnap = await get(checkRef);
-                    if (!checkSnap.exists() || checkSnap.val().status !== 'pending') {
-                      Alert.alert('Ошибка', 'Приглашение было отменено.', [{ text: 'OK' }]);
-                      currentAlertVisible.current = false;
-                      currentAlertInvId.current = null;
-                      hasShownAlertFor.current.delete(invId);
-                      return;
-                    }
-                    const gameId = invData.gameId || `invite_${invData.from}_${userId}_${Date.now()}`;
-                    const gameRef = ref(db, 'games_checkers/' + gameId);
-                    await set(gameRef, {
-                      players: { [invData.from]: 1, [userId]: 2 },
-                      board: initialBoard(),
-                      turn: invData.from,
-                      currentPlayer: invData.from,
-                      status: 'active',
-                      gameType: invData.gameType || 'russian',
-                      createdAt: Date.now(),
-                    });
-                    await update(ref(db, `invitations/${invId}`), { status: 'accepted', gameId });
-                    await remove(ref(db, `invitations/${invId}`));
-                    currentAlertVisible.current = false;
-                    currentAlertInvId.current = null;
-                    hasShownAlertFor.current.delete(invId);
-                    navigateToGame(gameId, userId, 2);
-                  }
-                }
-              ],
-              { cancelable: false, onDismiss: () => {
-                currentAlertVisible.current = false;
-                currentAlertInvId.current = null;
-                hasShownAlertFor.current.delete(invId);
-              }}
-            );
+            setCurrentInvite({
+              invId,
+              fromName: invData.fromName,
+              fromAvatar: invData.fromAvatar,
+              fromLevel: invData.fromLevel,
+              gameType: invData.gameType,
+              from: invData.from,
+            });
+            setInviteModalVisible(true);
           }
         }
 
@@ -229,6 +185,8 @@ function AppNavigator() {
     currentAlertVisible.current = false;
     currentAlertInvId.current = null;
     wasAcceptedRef.current = false;
+    setInviteModalVisible(false);
+    setCurrentInvite(null);
 
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     if (unsubscribeInvitations.current) {
@@ -252,7 +210,7 @@ function AppNavigator() {
     };
   }, [createInvitationsSubscription]);
 
-  // Отслеживание онлайн-статуса (без изменений)
+  // Отслеживание онлайн-статуса
   useEffect(() => {
     if (!userId) return;
     const statusRef = ref(db, `status/${userId}`);
@@ -266,18 +224,8 @@ function AppNavigator() {
         onDisconnect(statusRef).update({ online: false, lastSeen: Date.now() });
       }
     });
-    const handleAppStateChange = (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        updateOnlineStatus(true);
-      } else if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
-        updateOnlineStatus(false);
-      }
-      appState.current = nextAppState;
-    };
-    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
     return () => {
       connectedUnsubscribe();
-      appStateSubscription.remove();
       updateOnlineStatus(false);
     };
   }, [userId]);
@@ -297,11 +245,20 @@ function AppNavigator() {
     };
   }, [userId]);
 
-  // AppState handler (возврат из фона)
+  // AppState handler (возврат из фона + онлайн статус)
   useEffect(() => {
     if (!userId || !isNavigationReady) return;
+
+    const statusRef = ref(db, `status/${userId}`);
+    const updateOnlineStatus = (isOnline) => {
+      set(statusRef, { online: isOnline, lastSeen: Date.now() });
+    };
+
     const handleAppStateChange = async (nextAppState) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // Устанавливаем онлайн при возврате
+        updateOnlineStatus(true);
+
         resetInviteFlags();
         await new Promise(resolve => setTimeout(resolve, 1000));
         if (pendingGameId.current) {
@@ -333,6 +290,9 @@ function AppNavigator() {
             }
           }
         }
+      } else if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+        // Устанавливаем офлайн при уходе в фон
+        updateOnlineStatus(false);
       }
       appState.current = nextAppState;
     };
@@ -364,6 +324,69 @@ function AppNavigator() {
   }, [userId, isNavigationReady]);
 
   if (loading) return null;
+
+  const handleAcceptInvite = async () => {
+    if (!currentInvite) return;
+
+    wasAcceptedRef.current = true;
+    const checkRef = ref(db, `invitations/${currentInvite.invId}`);
+    const checkSnap = await get(checkRef);
+
+    if (!checkSnap.exists() || checkSnap.val().status !== 'pending') {
+      Alert.alert('Ошибка', 'Приглашение было отменено.', [{ text: 'OK' }]);
+      setInviteModalVisible(false);
+      setCurrentInvite(null);
+      currentAlertVisible.current = false;
+      currentAlertInvId.current = null;
+      hasShownAlertFor.current.delete(currentInvite.invId);
+      return;
+    }
+
+    const gameId = checkSnap.val().gameId || `invite_${currentInvite.from}_${userId}_${Date.now()}`;
+    const gameRef = ref(db, 'games_checkers/' + gameId);
+
+    await set(gameRef, {
+      players: { [currentInvite.from]: 1, [userId]: 2 },
+      board: initialBoard(),
+      turn: currentInvite.from,
+      currentPlayer: currentInvite.from,
+      status: 'active',
+      gameType: currentInvite.gameType || 'russian',
+      createdAt: Date.now(),
+    });
+
+    await update(ref(db, `invitations/${currentInvite.invId}`), { status: 'accepted', gameId });
+    await remove(ref(db, `invitations/${currentInvite.invId}`));
+
+    setInviteModalVisible(false);
+    setCurrentInvite(null);
+    currentAlertVisible.current = false;
+    currentAlertInvId.current = null;
+    hasShownAlertFor.current.delete(currentInvite.invId);
+
+    navigateToGame(gameId, userId, 2);
+  };
+
+  const handleDeclineInvite = async () => {
+    if (!currentInvite) return;
+
+    await remove(ref(db, `invitations/${currentInvite.invId}`));
+    setInviteModalVisible(false);
+    setCurrentInvite(null);
+    currentAlertVisible.current = false;
+    currentAlertInvId.current = null;
+    hasShownAlertFor.current.delete(currentInvite.invId);
+  };
+
+  const handleCloseInvite = () => {
+    if (!currentInvite) return;
+
+    setInviteModalVisible(false);
+    setCurrentInvite(null);
+    currentAlertVisible.current = false;
+    currentAlertInvId.current = null;
+    hasShownAlertFor.current.delete(currentInvite.invId);
+  };
 
   return (
     <InviteProvider resetInviteFlags={resetInviteFlags}>
@@ -417,6 +440,17 @@ function AppNavigator() {
           )}
         </Stack.Navigator>
       </NavigationContainer>
+
+      <InviteModal
+        visible={inviteModalVisible}
+        onClose={handleCloseInvite}
+        onAccept={handleAcceptInvite}
+        onDecline={handleDeclineInvite}
+        fromName={currentInvite?.fromName}
+        fromAvatar={currentInvite?.fromAvatar}
+        fromLevel={currentInvite?.fromLevel}
+        gameType={currentInvite?.gameType}
+      />
     </InviteProvider>
   );
 }
