@@ -253,6 +253,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
         // Проигрыш - сбрасываем серию
         if (currentStreak > 0) {
           await update(userRef, { winStreak: 0 });
+          await updateProgress(TASK_TYPES.WIN_STREAK, 0);
         }
       }
     } catch (error) {
@@ -262,7 +263,10 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     // Сыгранная игра (независимо от результата, но только если не сдался)
     await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
     await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
-    await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+    // Засчитываем "Сыграть с другом" только если игра через приглашение
+    if (gameId.startsWith('invite_') || gameId.startsWith('private_')) {
+      await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+    }
     if (gameData?.gameType === 'giveaway') {
       await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
     }
@@ -555,6 +559,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
               // Проигрыш - сбрасываем серию
               if (currentStreak > 0) {
                 await update(userRef, { winStreak: 0 });
+                await updateProgress(TASK_TYPES.WIN_STREAK, 0);
               }
             }
           } catch (error) {
@@ -564,7 +569,10 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
           // Сыгранная игра (независимо от результата)
           await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
           await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
-          await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+          // Засчитываем "Сыграть с другом" только если игра через приглашение
+          if (gameId.startsWith('invite_') || gameId.startsWith('private_')) {
+            await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+          }
           if (data.gameType === 'giveaway') {
             await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
           }

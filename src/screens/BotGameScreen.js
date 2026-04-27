@@ -194,6 +194,8 @@ const BotGameScreen = ({ route, navigation }) => {
                 await updateProgress(TASK_TYPES.WIN_BOT, 1);
                 if (difficulty === 'hard' || difficulty === 'grandmaster') {
                   await updateProgress(TASK_TYPES.WIN_BOT_HARD, 1);
+                } else if (difficulty === 'medium') {
+                  await updateProgress(TASK_TYPES.WIN_BOT_MEDIUM, 1);
                 }
               }
               if (gameType === 'giveaway') {
@@ -203,6 +205,7 @@ const BotGameScreen = ({ route, navigation }) => {
               // Поражение - сбрасываем серию
               if (currentStreak > 0) {
                 await update(userRef, { winStreak: 0 });
+                await updateProgress(TASK_TYPES.WIN_STREAK, 0);
               }
               if (!isFakeOpponent) {
                 await updateProgress(TASK_TYPES.LOSE_BOT, 1);
@@ -523,11 +526,6 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const handleSelectCell = (row, col) => {
     if (currentPlayer !== 1 || gameOver || botThinking || animatingMove || isAnimatingRef.current) {
-      return;
-        botThinking,
-        animatingMove: !!animatingMove,
-        isAnimating: isAnimatingRef.current
-      });
       return;
     }
 
