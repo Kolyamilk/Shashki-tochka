@@ -158,14 +158,31 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const isInitialized = useRef(false);
   const lastBoardRef = useRef(null);
   const lastMoveWasMineRef = useRef(false);
+  const inactivityTimerRef = useRef(null);
+  const lastMoveTimeRef = useRef(Date.now());
 
-const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrender = false) => {
+const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrender = false, isTimeout = false) => {
   if (isGameEnding.current) return;
   isGameEnding.current = true;
+
+  // Очищаем таймер бездействия
+  if (inactivityTimerRef.current) {
+    clearTimeout(inactivityTimerRef.current);
+    inactivityTimerRef.current = null;
+  }
 
   let expGained = 0;
   let oldExp = 0;
   const isWin = winnerId === playerKey;
+
+  // Показываем алерт если проиграли по таймауту
+  if (isTimeout && !isWin) {
+    Alert.alert(
+      'Время вышло',
+      'Вы не сделали ход в течение 2 минут и автоматически проиграли.',
+      [{ text: 'OK' }]
+    );
+  }
 
   if (winnerId && loserId) {
     try {
@@ -303,6 +320,9 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       console.warn('⚠️ Попытка хода не в свой ход');
       return;
     }
+
+    // Обновляем время последнего хода
+    lastMoveTimeRef.current = Date.now();
 
     setSelectedCell(null);
     setValidMoves([]);
@@ -573,10 +593,38 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       if (data.currentPlayer !== playerKey) {
         setSelectedCell(null);
         setValidMoves([]);
+      } else {
+        // Мой ход - обновляем время последнего хода
+        lastMoveTimeRef.current = Date.now();
       }
     });
     return () => unsubscribe();
   }, [gameId, playerKey, myRole]);
+
+  // Таймер бездействия - проверяем каждые 10 секунд
+  useEffect(() => {
+    if (gameOver || !gameData) return;
+
+    const checkInactivity = () => {
+      const now = Date.now();
+      const timeSinceLastMove = now - lastMoveTimeRef.current;
+      const TWO_MINUTES = 2 * 60 * 1000;
+
+      // Если прошло больше 2 минут и сейчас мой ход
+      if (timeSinceLastMove >= TWO_MINUTES && gameData.currentPlayer === playerKey) {
+        console.log('⏰ Таймаут бездействия - автоматическая сдача');
+        const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+        if (opponentId) {
+          endGame('Вы не сделали ход вовремя', opponentId, playerKey, true, true);
+        }
+      }
+    };
+
+    // Проверяем каждые 10 секунд
+    const interval = setInterval(checkInactivity, 10000);
+
+    return () => clearInterval(interval);
+  }, [gameOver, gameData, playerKey]);
 
   useFocusEffect(
     useCallback(() => {

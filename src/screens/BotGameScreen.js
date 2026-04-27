@@ -64,6 +64,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const isBotThinkingRef = useRef(false);
   const gameIdRef = useRef(null);
   const botTurnTriggerRef = useRef(0);
+  const lastMoveTimeRef = useRef(Date.now());
 
   // Подсчёт съеденных шашек
   const initialPiecesCount = 12;
@@ -110,11 +111,20 @@ const BotGameScreen = ({ route, navigation }) => {
 
   // Проверка окончания игры
   useEffect(() => {
-    const endGame = async (resultMessage, winner = null) => {
+    const endGame = async (resultMessage, winner = null, isTimeout = false) => {
       if (gameOver) return;
       setGameOver(true);
 
-      console.log('🎮 endGame вызван:', { winner, gameType, userId });
+      console.log('🎮 endGame вызван:', { winner, gameType, userId, isTimeout });
+
+      // Показываем алерт если проиграли по таймауту
+      if (isTimeout && winner === 2) {
+        Alert.alert(
+          'Время вышло',
+          'Вы не сделали ход в течение 2 минут и автоматически проиграли.',
+          [{ text: 'OK' }]
+        );
+      }
 
       let expGained = 0;
       let oldExp = 0;
@@ -387,7 +397,10 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const applyMove = (move) => {
     console.log('🎯 Применяем ход:', move);
-    
+
+    // Обновляем время последнего хода
+    lastMoveTimeRef.current = Date.now();
+
     setSelectedCell(null);
     setValidMoves([]);
 
@@ -514,13 +527,35 @@ const BotGameScreen = ({ route, navigation }) => {
     
     return () => clearTimeout(timeout);
   }, [
-    currentPlayer, 
-    gameOver, 
-    board, 
-    currentPiecePos, 
+    currentPlayer,
+    gameOver,
+    board,
+    currentPiecePos,
     difficulty,
     botTurnTriggerRef.current  // ← ← ← НОВОЕ: триггер
   ]);
+
+  // Таймер бездействия - проверяем каждые 10 секунд
+  useEffect(() => {
+    if (gameOver || currentPlayer !== 1) return;
+
+    const checkInactivity = () => {
+      const now = Date.now();
+      const timeSinceLastMove = now - lastMoveTimeRef.current;
+      const TWO_MINUTES = 2 * 60 * 1000;
+
+      // Если прошло больше 2 минут и сейчас ход игрока
+      if (timeSinceLastMove >= TWO_MINUTES && currentPlayer === 1) {
+        console.log('⏰ Таймаут бездействия игрока - автоматическая сдача');
+        endGame('Вы не сделали ход вовремя', 2, true);
+      }
+    };
+
+    // Проверяем каждые 10 секунд
+    const interval = setInterval(checkInactivity, 10000);
+
+    return () => clearInterval(interval);
+  }, [gameOver, currentPlayer]);
 
   const handleSelectCell = (row, col) => {
     if (currentPlayer !== 1 || gameOver || botThinking || animatingMove || isAnimatingRef.current) {
