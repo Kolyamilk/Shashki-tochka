@@ -1,5 +1,15 @@
 // src/utils/giftSystem.js
 
+// Специальный подарок для обновления заданий
+export const TASK_REFRESH_GIFT = {
+  id: 'task_refresh_token',
+  name: 'Жетон обновления',
+  emoji: '🎫',
+  description: 'Позволяет обновить ежедневные задания в любое время',
+  type: 'consumable',
+  rarity: 'special',
+};
+
 // Уникальные подарки за достижение уровней (каждые 5 уровней)
 export const LEVEL_GIFTS = {
   5: {
@@ -102,6 +112,7 @@ export const RARITY_COLORS = {
   epic: '#9b59b6',        // Фиолетовый
   legendary: '#f39c12',   // Оранжевый
   mythic: '#e74c3c',      // Красный
+  special: '#4ECDC4',     // Бирюзовый
 };
 
 // Названия редкости
@@ -112,6 +123,7 @@ export const RARITY_NAMES = {
   epic: 'Эпический',
   legendary: 'Легендарный',
   mythic: 'Мифический',
+  special: 'Особый',
 };
 
 // Получить подарок за уровень

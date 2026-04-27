@@ -14,7 +14,7 @@ import { ref, get, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
-import { getAvailableGifts, RARITY_COLORS, RARITY_NAMES } from '../utils/giftSystem';
+import { getAvailableGifts, RARITY_COLORS, RARITY_NAMES, TASK_REFRESH_GIFT } from '../utils/giftSystem';
 import { getLevelFromExp } from '../utils/levelSystem';
 import ExpGainModal from '../components/ExpGainModal';
 
@@ -27,11 +27,34 @@ const ProfileGiftScreen = ({ navigation }) => {
   const [expModalVisible, setExpModalVisible] = useState(false);
   const [expGainData, setExpGainData] = useState({ expGained: 0, oldExp: 0 });
   const [newGiftIds, setNewGiftIds] = useState([]);
+  const [tokenCount, setTokenCount] = useState(0);
 
   useEffect(() => {
     loadUserGifts();
     markGiftsAsViewed();
+    loadTokens();
   }, [userId]);
+
+  // Загрузка количества жетонов
+  useEffect(() => {
+    if (!userId) return;
+
+    const interval = setInterval(loadTokens, 5000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
+  const loadTokens = async () => {
+    if (!userId) return;
+
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+      const userData = snapshot.val() || {};
+      setTokenCount(userData.taskRefreshTokens || 0);
+    } catch (error) {
+      console.error('Ошибка загрузки жетонов:', error);
+    }
+  };
 
   const markGiftsAsViewed = async () => {
     if (!userId) return;
@@ -67,6 +90,13 @@ const ProfileGiftScreen = ({ navigation }) => {
         const userData = snapshot.val();
         const currentLevel = getLevelFromExp(userData.stats?.exp || 0).level;
 
+        // Инициализация taskRefreshTokens если его нет (для существующих пользователей)
+        if (userData.taskRefreshTokens === undefined) {
+          await update(userRef, {
+            taskRefreshTokens: 0,
+          });
+        }
+
         // Получаем все доступные подарки до текущего уровня
         const availableGifts = getAvailableGifts(currentLevel);
 
@@ -81,6 +111,15 @@ const ProfileGiftScreen = ({ navigation }) => {
         const userGiftsList = availableGifts.filter(
           gift => !soldGifts.includes(gift.id)
         );
+
+        // Добавляем жетон обновления заданий в начало списка, если есть
+        const tokens = userData.taskRefreshTokens || 0;
+        if (tokens > 0) {
+          userGiftsList.unshift({
+            ...TASK_REFRESH_GIFT,
+            count: tokens,
+          });
+        }
 
         setGifts(userGiftsList);
         setUserGifts(userGiftsList);
@@ -146,6 +185,7 @@ const ProfileGiftScreen = ({ navigation }) => {
   };
   const renderGiftItem = ({ item }) => {
     const isNew = newGiftIds.includes(item.id);
+    const isToken = item.type === 'consumable';
 
     return (
       <TouchableOpacity
@@ -162,6 +202,11 @@ const ProfileGiftScreen = ({ navigation }) => {
             <Text style={styles.newBadgeText}>NEW</Text>
           </View>
         )}
+        {isToken && item.count > 1 && (
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>x{item.count}</Text>
+          </View>
+        )}
         <View style={[styles.giftEmojiContainer, { backgroundColor: `${RARITY_COLORS[item.rarity]}20` }]}>
           <Text style={styles.giftEmoji}>{item.emoji}</Text>
         </View>
@@ -169,7 +214,7 @@ const ProfileGiftScreen = ({ navigation }) => {
         <Text style={[styles.giftRarity, { color: RARITY_COLORS[item.rarity] }]}>
           {RARITY_NAMES[item.rarity]}
         </Text>
-        <Text style={styles.giftLevel}>Уровень {item.level}</Text>
+        {!isToken && <Text style={styles.giftLevel}>Уровень {item.level}</Text>}
       </TouchableOpacity>
     );
   };
@@ -188,8 +233,8 @@ const ProfileGiftScreen = ({ navigation }) => {
           </TouchableOpacity>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>Мои подарки</Text>
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{gifts.length}</Text>
+            <View style={styles.headerCountBadge}>
+              <Text style={styles.headerCountText}>{gifts.length}</Text>
             </View>
           </View>
           <View style={styles.placeholderRight} />
@@ -230,31 +275,52 @@ const ProfileGiftScreen = ({ navigation }) => {
                   </Text>
                   <Text style={styles.modalDescription}>{selectedGift.description}</Text>
 
-                  <View style={styles.modalStats}>
-                    <View style={styles.modalStatItem}>
-                      <Text style={styles.modalStatLabel}>Уровень</Text>
-                      <Text style={styles.modalStatValue}>{selectedGift.level}</Text>
-                    </View>
-                    <View style={styles.modalStatItem}>
-                      <Text style={styles.modalStatLabel}>Цена продажи</Text>
-                      <Text style={styles.modalStatValue}>{selectedGift.sellValue} опыта</Text>
-                    </View>
-                  </View>
+                  {selectedGift.type === 'consumable' ? (
+                    <>
+                      <View style={styles.modalStats}>
+                        <View style={styles.modalStatItem}>
+                          <Text style={styles.modalStatLabel}>Количество</Text>
+                          <Text style={styles.modalStatValue}>{selectedGift.count}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                          style={[styles.modalButton, styles.closeButton]}
+                          onPress={() => setModalVisible(false)}
+                        >
+                          <Text style={styles.modalButtonText}>Закрыть</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.modalStats}>
+                        <View style={styles.modalStatItem}>
+                          <Text style={styles.modalStatLabel}>Уровень</Text>
+                          <Text style={styles.modalStatValue}>{selectedGift.level}</Text>
+                        </View>
+                        <View style={styles.modalStatItem}>
+                          <Text style={styles.modalStatLabel}>Цена продажи</Text>
+                          <Text style={styles.modalStatValue}>{selectedGift.sellValue} опыта</Text>
+                        </View>
+                      </View>
 
-                  <View style={styles.modalButtons}>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.sellButton]}
-                      onPress={handleSellGift}
-                    >
-                      <Text style={styles.modalButtonText}>💰 Продать</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.closeButton]}
-                      onPress={() => setModalVisible(false)}
-                    >
-                      <Text style={styles.modalButtonText}>Закрыть</Text>
-                    </TouchableOpacity>
-                  </View>
+                      <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                          style={[styles.modalButton, styles.sellButton]}
+                          onPress={handleSellGift}
+                        >
+                          <Text style={styles.modalButtonText}>💰 Продать</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.modalButton, styles.closeButton]}
+                          onPress={() => setModalVisible(false)}
+                        >
+                          <Text style={styles.modalButtonText}>Закрыть</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
                 </>
               )}
             </View>
@@ -310,7 +376,7 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     marginRight: 8,
   },
-  countBadge: {
+  headerCountBadge: {
     backgroundColor: '#4ECDC4',
     borderRadius: 12,
     paddingHorizontal: 8,
@@ -318,7 +384,7 @@ const styles = StyleSheet.create({
     minWidth: 24,
     alignItems: 'center',
   },
-  countText: {
+  headerCountText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#1a2a3a',
@@ -365,6 +431,21 @@ const styles = StyleSheet.create({
   },
   newBadgeText: {
     fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
+  },
+  countBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#4ECDC4',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    zIndex: 1,
+  },
+  countBadgeText: {
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1a2a3a',
   },

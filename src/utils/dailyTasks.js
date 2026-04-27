@@ -134,7 +134,7 @@ const TASK_TEMPLATES = [
   {
     id: 'play_with_friend',
     type: TASK_TYPES.PLAY_WITH_FRIEND,
-    title: 'Дружеская встреча',
+    title: 'Дуэль',
     description: 'Сыграйте через приглашение',
     target: 1,
     icon: '👥',
@@ -226,7 +226,7 @@ const shuffleWithSeed = (items, seed) => {
 
 // Номер версии генератора ежедневных заданий.
 // Увеличивайте, когда шаблоны или логика выбора меняются.
-export const DAILY_TASKS_VERSION = 3;
+export const DAILY_TASKS_VERSION = 4;
 
 // Награда за выполнение задания
 export const TASK_REWARD = 100;

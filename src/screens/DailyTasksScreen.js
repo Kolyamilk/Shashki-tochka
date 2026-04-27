@@ -1,23 +1,31 @@
 // src/screens/DailyTasksScreen.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { colors } from '../styles/globalStyles';
 import { useDailyTasks } from '../context/DailyTasksContext';
 import { TASK_REWARD } from '../utils/dailyTasks';
+import { useAuth } from '../context/AuthContext';
+import { ref, get } from 'firebase/database';
+import { db } from '../firebase/config';
 
 const DailyTasksScreen = ({ navigation }) => {
-  const { 
-    tasks, 
-    loading, 
-    getCompletedCount, 
-    refreshDailyTasks, 
-    userLevel, 
-    canRefreshTasks 
+  const {
+    tasks,
+    loading,
+    getCompletedCount,
+    refreshDailyTasks,
+    refreshWithToken,
+    userLevel,
+    canRefreshTasks
   } = useDailyTasks();
+  const { userId } = useAuth();
 
   const [showRefreshModal, setShowRefreshModal] = useState(false);
   const [showLevelLockedModal, setShowLevelLockedModal] = useState(false);
   const [showAlreadyUsedModal, setShowAlreadyUsedModal] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [showTokenInfoModal, setShowTokenInfoModal] = useState(false);
+  const [tokenCount, setTokenCount] = useState(0);
   const [dotCount, setDotCount] = useState(0);
 
   // Анимация точек при обновлении
@@ -31,6 +39,39 @@ const DailyTasksScreen = ({ navigation }) => {
     }, 300);
     return () => clearInterval(interval);
   }, [showRefreshModal]);
+
+  // Загрузка количества жетонов
+  useEffect(() => {
+    if (!userId) return;
+
+    const loadTokens = async () => {
+      try {
+        const userRef = ref(db, `users/${userId}`);
+        const snapshot = await get(userRef);
+        const userData = snapshot.val() || {};
+
+        // Инициализация taskRefreshTokens если его нет (для существующих пользователей)
+        if (userData.taskRefreshTokens === undefined) {
+          await update(userRef, {
+            taskRefreshTokens: 0,
+          });
+          setTokenCount(0);
+        } else {
+          setTokenCount(userData.taskRefreshTokens || 0);
+        }
+
+        const tokens = userData.taskRefreshTokens || 0;
+        console.log('Загружено жетонов:', tokens, 'для userId:', userId);
+        setTokenCount(tokens);
+      } catch (error) {
+        console.error('Ошибка загрузки жетонов:', error);
+      }
+    };
+
+    loadTokens();
+    const interval = setInterval(loadTokens, 5000);
+    return () => clearInterval(interval);
+  }, [userId]);
 
   const handleRefresh = async () => {
     if (showRefreshModal) return;
@@ -46,6 +87,18 @@ const DailyTasksScreen = ({ navigation }) => {
     await new Promise(resolve => setTimeout(resolve, 2000));
     await refreshDailyTasks();
     setShowRefreshModal(false);
+  };
+
+  const handleTokenRefresh = async () => {
+    if (showRefreshModal) return;
+    setShowRefreshModal(true);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const success = await refreshWithToken();
+    setShowRefreshModal(false);
+    if (success) {
+      setShowTokenModal(false);
+      setTokenCount(prev => prev - 1);
+    }
   };
 
   if (loading) {
@@ -99,6 +152,54 @@ const DailyTasksScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* Модалка: использование жетона */}
+      <Modal visible={showTokenModal} transparent animationType="fade" onRequestClose={() => setShowTokenModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalText, { fontSize: 28, marginBottom: 10 }]}>🎫</Text>
+            <Text style={[styles.modalText, { fontSize: 22, marginBottom: 15 }]}>Жетон обновления</Text>
+            <Text style={styles.modalText}>У вас есть жетонов: {tokenCount}</Text>
+            <Text style={[styles.modalText, { marginTop: 15, fontSize: 14, color: '#aaa' }]}>Использовать жетон для обновления заданий?</Text>
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity style={[styles.modalButton, { marginRight: 10 }]} onPress={handleTokenRefresh}>
+                <Text style={styles.modalButtonText}>Использовать</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#ff6b6b' }]} onPress={() => setShowTokenModal(false)}>
+                <Text style={styles.modalButtonText}>Отмена</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модалка: информация о жетонах */}
+      <Modal visible={showTokenInfoModal} transparent animationType="fade" onRequestClose={() => setShowTokenInfoModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalText, { fontSize: 28, marginBottom: 10 }]}>🎫</Text>
+            <Text style={[styles.modalText, { fontSize: 22, marginBottom: 15 }]}>Как получить жетоны?</Text>
+            <Text style={[styles.modalText, { fontSize: 15, marginBottom: 12, textAlign: 'left' }]}>
+              Жетоны обновления позволяют обновить задания в любое время!
+            </Text>
+            <Text style={[styles.modalText, { fontSize: 14, color: '#4ECDC4', marginBottom: 8, textAlign: 'left' }]}>
+              🎁 За каждый новый уровень
+            </Text>
+            <Text style={[styles.modalText, { fontSize: 14, color: '#4ECDC4', marginBottom: 8, textAlign: 'left' }]}>
+              ✅ За выполнение всех 3 заданий
+            </Text>
+            <Text style={[styles.modalText, { fontSize: 14, color: '#4ECDC4', marginBottom: 15, textAlign: 'left' }]}>
+              👥 Другие игроки могут подарить вам жетоны
+            </Text>
+            <Text style={[styles.modalText, { fontSize: 13, color: '#aaa', marginTop: 10 }]}>
+              Жетоны хранятся в разделе "Мои подарки"
+            </Text>
+            <TouchableOpacity style={styles.modalButton} onPress={() => setShowTokenInfoModal(false)}>
+              <Text style={styles.modalButtonText}>Понятно</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>📋 Ежедневные задания</Text>
         <Text style={styles.subtitle}>Выполнено: {completedCount} / {tasks.length}</Text>
@@ -127,25 +228,37 @@ const DailyTasksScreen = ({ navigation }) => {
 
         <Text style={styles.resetInfo}>🕐 Задания обновляются автоматически каждый день в 00:00 (МСК)</Text>
 
-        {userLevel >= 10 && (
-          <View style={styles.refreshStatusContainer}>
-            {canRefreshTasks ? (
-              <Text style={styles.refreshAvailableText}>✨ Можно обновить задания сегодня</Text>
-            ) : (
-              <Text style={styles.refreshLockedText}>🔁 Сегодня вы уже обновляли задания</Text>
-            )}
-          </View>
-        )}
+        <View style={styles.buttonsContainer}>
+          {userLevel >= 10 && (
+            <View style={styles.refreshStatusContainer}>
+              {canRefreshTasks ? (
+                <Text style={styles.refreshAvailableText}>✨ Можно обновить задания сегодня</Text>
+              ) : (
+                <Text style={styles.refreshLockedText}>🔁 Сегодня вы уже обновляли задания</Text>
+              )}
+            </View>
+          )}
 
-        <TouchableOpacity
-          style={[styles.refreshButton, (!canRefreshTasks || userLevel < 10) && styles.refreshButtonDisabled]}
-          onPress={handleRefresh}
-          disabled={showRefreshModal}
-        >
-          <Text style={styles.refreshButtonText}>
-            {showRefreshModal ? 'Обновляем задачи' : 'Обновить задания'}
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.refreshButton, (!canRefreshTasks || userLevel < 10) && styles.refreshButtonDisabled]}
+            onPress={handleRefresh}
+            disabled={showRefreshModal}
+          >
+            <Text style={styles.refreshButtonText}>
+              {showRefreshModal ? 'Обновляем задачи' : 'Бесплатное обновление (1 раз в день)'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tokenButton, tokenCount === 0 && styles.tokenButtonDisabled]}
+            onPress={() => tokenCount > 0 ? setShowTokenModal(true) : setShowTokenInfoModal(true)}
+            disabled={showRefreshModal}
+          >
+            <Text style={styles.tokenButtonText}>
+              🎫 Обновить с помощью жетона ({tokenCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -172,30 +285,30 @@ const styles = StyleSheet.create({
     marginTop: 50,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: colors.secondary,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#4ECDC4',
     textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   rewardInfo: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#FFD700',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   resetInfo: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#aaa',
     textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 12,
     fontStyle: 'italic',
   },
   tasksContainer: {
@@ -203,9 +316,9 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     backgroundColor: '#2c3e50',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 15,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -216,35 +329,35 @@ const styles = StyleSheet.create({
   taskHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   taskIcon: {
-    fontSize: 40,
-    marginRight: 15,
+    fontSize: 32,
+    marginRight: 12,
   },
   taskInfo: {
     flex: 1,
   },
   taskTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: colors.textLight,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   taskDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#aaa',
   },
   checkmark: {
-    width: 35,
-    height: 35,
-    borderRadius: 17.5,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#4ECDC4',
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkmarkText: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#fff',
     fontWeight: 'bold',
   },
@@ -275,15 +388,17 @@ const styles = StyleSheet.create({
   refreshButton: {
     alignSelf: 'center',
     backgroundColor: colors.secondary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 25,
-    marginBottom: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 8,
+    width: '90%',
   },
   refreshButtonText: {
     color: '#1a2a3a',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    textAlign: 'center',
   },
   refreshButtonDisabled: {
     opacity: 0.7,
@@ -371,27 +486,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  modalButtonRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
+  tokenButton: {
+    alignSelf: 'center',
+    backgroundColor: '#9b59b6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 0,
+    marginBottom: 10,
+    width: '90%',
+  },
+  tokenButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  tokenButtonDisabled: {
+    opacity: 0.5,
+    backgroundColor: '#666',
+  },
+  buttonsContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
   refreshStatusContainer: {
     alignItems: 'center',
-    marginVertical: 12,
+    marginVertical: 8,
   },
   refreshAvailableText: {
     color: '#4ECDC4',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     backgroundColor: 'rgba(78,205,196,0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
   },
   refreshLockedText: {
     color: '#ff9999',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     backgroundColor: 'rgba(255,107,107,0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
   },
   refreshButtonDisabled: {
     opacity: 0.5,

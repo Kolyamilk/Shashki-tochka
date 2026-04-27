@@ -93,6 +93,17 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   const leveledUp = winnerNewLevel > winnerOldLevel;
   let giftAdded = false;
 
+  const winnerUpdateData = { expHistory: winnerHistory };
+
+  // Добавляем жетон обновления заданий при каждом повышении уровня
+  if (leveledUp) {
+    const winnerUserRef = ref(db, `users/${winnerId}`);
+    const winnerUserSnap = await get(winnerUserRef);
+    const winnerUserData = winnerUserSnap.val() || {};
+    const currentTokens = winnerUserData.taskRefreshTokens || 0;
+    winnerUpdateData.taskRefreshTokens = currentTokens + 1;
+  }
+
   // Добавляем подарок только если: 1) повысился уровень, 2) новый уровень кратен 5, 3) подарок существует
   if (leveledUp && winnerNewLevel % 5 === 0 && winnerNewLevel >= 5) {
     const { LEVEL_GIFTS } = require('../utils/giftSystem');
@@ -103,20 +114,13 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
       const newGifts = winnerUserData.newGifts || [];
       const giftId = `gift_level_${winnerNewLevel}`;
       if (!newGifts.includes(giftId)) {
-        await update(ref(db, `users/${winnerId}`), {
-          expHistory: winnerHistory,
-          newGifts: [...newGifts, giftId],
-        });
+        winnerUpdateData.newGifts = [...newGifts, giftId];
         giftAdded = true;
-      } else {
-        await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
       }
-    } else {
-      await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
     }
-  } else {
-    await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
   }
+
+  await update(ref(db, `users/${winnerId}`), winnerUpdateData);
 
   // История для проигравшего (если не сдался)
   if (!isSurrender) {
@@ -136,7 +140,39 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
     };
     loserHistory.unshift(loserEntry);
     if (loserHistory.length > 50) loserHistory.pop();
-    await update(ref(db, `users/${loserId}`), { expHistory: loserHistory });
+
+    const loserUpdateData = { expHistory: loserHistory };
+
+    // Проверяем повышение уровня проигравшего
+    const loserOldLevel = getLevelFromExp(loserOldExp).level;
+    const loserNewLevel = getLevelFromExp(loserNewExp).level;
+    const loserLeveledUp = loserNewLevel > loserOldLevel;
+
+    // Добавляем жетон обновления заданий при каждом повышении уровня
+    if (loserLeveledUp) {
+      const loserUserRef = ref(db, `users/${loserId}`);
+      const loserUserSnap = await get(loserUserRef);
+      const loserUserData = loserUserSnap.val() || {};
+      const currentTokens = loserUserData.taskRefreshTokens || 0;
+      loserUpdateData.taskRefreshTokens = currentTokens + 1;
+    }
+
+    // Добавляем подарок только если: 1) повысился уровень, 2) новый уровень кратен 5, 3) подарок существует
+    if (loserLeveledUp && loserNewLevel % 5 === 0 && loserNewLevel >= 5) {
+      const { LEVEL_GIFTS } = require('../utils/giftSystem');
+      if (LEVEL_GIFTS[loserNewLevel]) {
+        const loserUserRef = ref(db, `users/${loserId}`);
+        const loserUserSnap = await get(loserUserRef);
+        const loserUserData = loserUserSnap.val() || {};
+        const newGifts = loserUserData.newGifts || [];
+        const giftId = `gift_level_${loserNewLevel}`;
+        if (!newGifts.includes(giftId)) {
+          loserUpdateData.newGifts = [...newGifts, giftId];
+        }
+      }
+    }
+
+    await update(ref(db, `users/${loserId}`), loserUpdateData);
   }
 
   return { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain, giftAdded };

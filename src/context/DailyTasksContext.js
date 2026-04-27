@@ -34,6 +34,7 @@ export const DailyTasksProvider = ({ children }) => {
   const [pendingReward, setPendingReward] = useState(null);
   const [userLevel, setUserLevel] = useState(1);
   const [nextRefreshTime, setNextRefreshTime] = useState(null);
+  const [canRefresh, setCanRefresh] = useState(false);
 
   // Вспомогательная: конвертация старого строкового формата в timestamp
   const convertLegacyRefreshDate = (dateStr) => {
@@ -71,15 +72,15 @@ export const DailyTasksProvider = ({ children }) => {
   const refreshDailyTasks = useCallback(async () => {
     if (!userId) return;
     if (userLevel < 10) {
-     
+
       return;
     }
     if (!canManualRefresh()) {
-     
+
       return;
     }
 
-    
+
     const today = getTodayDate();
     const nowTimestamp = Date.now();
 
@@ -111,6 +112,55 @@ export const DailyTasksProvider = ({ children }) => {
     } catch (error) {
     }
   }, [userId, tasks, userLevel, canManualRefresh]);
+
+  // Обновление заданий с помощью жетона
+  const refreshWithToken = useCallback(async () => {
+    if (!userId) return false;
+
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      const userSnap = await get(userRef);
+      const userData = userSnap.val() || {};
+      const currentTokens = userData.taskRefreshTokens || 0;
+
+      if (currentTokens <= 0) {
+        return false;
+      }
+
+      const today = getTodayDate();
+      const nowTimestamp = Date.now();
+
+      // Генерируем новые задания
+      let newTasks = generateDailyTasks(today, nowTimestamp, userId);
+
+      // Избегаем полного повторения ID
+      if (tasks.length > 0) {
+        const oldIds = tasks.map(task => task.id).join(',');
+        let attempt = 0;
+        while (newTasks.map(task => task.id).join(',') === oldIds && attempt < 5) {
+          newTasks = generateDailyTasks(today, nowTimestamp + attempt);
+          attempt += 1;
+        }
+      }
+
+      await update(userRef, {
+        taskRefreshTokens: currentTokens - 1,
+        dailyTasks: {
+          tasks: newTasks,
+          lastUpdateDate: today,
+          lastManualRefreshTimestamp: userData.dailyTasks?.lastManualRefreshTimestamp || null,
+          version: DAILY_TASKS_VERSION,
+        },
+      });
+
+      setTasks(newTasks);
+      setLastUpdateDate(today);
+      return true;
+    } catch (error) {
+      console.error('Ошибка обновления заданий с помощью жетона:', error);
+      return false;
+    }
+  }, [userId, tasks]);
 
   // Загрузка заданий из Firebase (при старте и смене userId)
   useEffect(() => {
@@ -176,7 +226,7 @@ export const DailyTasksProvider = ({ children }) => {
     loadTasks();
   }, [userId]);
 
-  // Периодическое обновление уровня пользователя
+  // Периодическое обновление уровня пользователя и статуса canRefresh
   useEffect(() => {
     if (!userId) return;
 
@@ -192,12 +242,38 @@ export const DailyTasksProvider = ({ children }) => {
       }
     };
 
-    // Обновляем уровень каждые 5 секунд
-    const interval = setInterval(updateUserLevel, 5000);
-    return () => clearInterval(interval);
-  }, [userId]);
+    const updateRefreshStatus = async () => {
+      try {
+        const tasksRef = ref(db, `users/${userId}/dailyTasks`);
+        const snapshot = await get(tasksRef);
+        const data = snapshot.val();
 
-  // Обработка награды за выполненное задание (без изменений)
+        // Обновляем lastManualRefreshTimestamp из Firebase
+        let refreshTimestamp = null;
+        if (data?.lastManualRefreshTimestamp) {
+          refreshTimestamp = data.lastManualRefreshTimestamp;
+        } else if (data?.lastManualRefreshDate) {
+          refreshTimestamp = convertLegacyRefreshDate(data.lastManualRefreshDate);
+        }
+
+        setLastManualRefreshTimestamp(refreshTimestamp);
+        setCanRefresh(canManualRefresh());
+      } catch (error) {
+        console.error('Ошибка обновления статуса обновления:', error);
+      }
+    };
+
+    // Обновляем уровень и статус каждые 5 секунд
+    updateUserLevel();
+    updateRefreshStatus();
+    const interval = setInterval(() => {
+      updateUserLevel();
+      updateRefreshStatus();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [userId, canManualRefresh]);
+
+  // Обработка награды за выполненное задание
   useEffect(() => {
     if (!pendingReward || !userId) return;
 
@@ -214,13 +290,27 @@ export const DailyTasksProvider = ({ children }) => {
         await update(userStatsRef, { exp: newExp });
         const levelInfo = getLevelFromExp(newExp);
         setUserLevel(levelInfo.level);
+
+        // Проверяем, все ли задания выполнены
+        const allCompleted = tasks.every(t => t.completed);
+        if (allCompleted) {
+          // Даем жетон обновления заданий
+          const userRef = ref(db, `users/${userId}`);
+          const userSnap = await get(userRef);
+          const userData = userSnap.val() || {};
+          const currentTokens = userData.taskRefreshTokens || 0;
+
+          await update(userRef, {
+            taskRefreshTokens: currentTokens + 1,
+          });
+        }
       } catch (error) {
         console.error('Ошибка начисления награды за задание:', error);
       }
     })();
 
     setPendingReward(null);
-  }, [pendingReward, userId]);
+  }, [pendingReward, userId, tasks]);
 
   // Обновление прогресса задания (без изменений)
   const updateProgress = async (taskType, increment = 1, gameType = null) => {
@@ -277,12 +367,13 @@ export const DailyTasksProvider = ({ children }) => {
     loading,
     updateProgress,
     refreshDailyTasks,
+    refreshWithToken,
     newlyCompletedTask,
     clearCompletedTask,
     getCompletedCount,
     TASK_TYPES,
     userLevel,
-    canRefreshTasks: canManualRefresh(),
+    canRefreshTasks: canRefresh,
     getTimeUntilNextRefresh,
     nextRefreshTime,
   };

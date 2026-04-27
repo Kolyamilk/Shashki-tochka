@@ -265,6 +265,15 @@ const BotGameScreen = ({ route, navigation }) => {
             expHistory: history,
           };
 
+          // Добавляем жетон обновления заданий при каждом повышении уровня
+          if (leveledUp) {
+            const userRef = ref(db, `users/${userId}`);
+            const userSnap = await get(userRef);
+            const userData = userSnap.val() || {};
+            const currentTokens = userData.taskRefreshTokens || 0;
+            updateData.taskRefreshTokens = currentTokens + 1;
+          }
+
           // Добавляем подарок только если: 1) повысился уровень, 2) новый уровень кратен 5, 3) подарок существует
           if (leveledUp && newLevel % 5 === 0 && newLevel >= 5) {
             const { LEVEL_GIFTS } = require('../utils/giftSystem');
