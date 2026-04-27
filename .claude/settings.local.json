@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -c src/screens/PlayerProfileScreen.js)",
+      "Bash(node -c src/screens/ProfileGiftScreen.js)",
+      "Bash(node -c src/screens/DailyTasksScreen.js)",
+      "Bash(node -c src/screens/LocalGameScreen.js)",
+      "Bash(node -c src/screens/ProfileScreen.js)",
+      "Bash(node -c src/utils/dailyTasks.js)",
+      "Bash(node -c src/utils/giftSystem.js)",
+      "Bash(node -c src/context/DailyTasksContext.js)",
+      "Bash(node *)",
+      "Bash(./gradlew assembleRelease)"
+    ]
+  }
+}

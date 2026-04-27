@@ -5,7 +5,7 @@ import { colors } from '../styles/globalStyles';
 import { useDailyTasks } from '../context/DailyTasksContext';
 import { TASK_REWARD } from '../utils/dailyTasks';
 import { useAuth } from '../context/AuthContext';
-import { ref, get } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { db } from '../firebase/config';
 
 const DailyTasksScreen = ({ navigation }) => {

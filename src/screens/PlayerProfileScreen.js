@@ -428,6 +428,19 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       setGiftAmount('');
       setGiftModalVisible(false);
 
+      // Обновляем список подарков
+      const updatedGifts = myGifts.map(gift => {
+        if (gift.type === 'consumable') {
+          const newCount = myCurrentTokens - amount;
+          if (newCount > 0) {
+            return { ...gift, count: newCount };
+          }
+          return null; // Удалим жетоны из списка, если их 0
+        }
+        return gift;
+      }).filter(Boolean); // Убираем null элементы
+      setMyGifts(updatedGifts);
+
       Alert.alert('Успешно!', `Вы подарили ${amount} жетонов игроку ${playerData.name || 'Игрок'}`);
     } catch (error) {
       console.error('Ошибка отправки подарка:', error);
@@ -678,15 +691,6 @@ const PlayerProfileScreen = ({ route, navigation }) => {
 
             <View style={styles.giftButtons}>
               <TouchableOpacity
-                style={[styles.giftSendButton, sendingGift && styles.giftSendButtonDisabled]}
-                onPress={handleSendGift}
-                disabled={sendingGift}
-              >
-                <Text style={styles.giftSendButtonText}>
-                  {sendingGift ? 'Отправка...' : 'Подарить'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={styles.giftCancelButton}
                 onPress={() => {
                   setGiftModalVisible(false);
@@ -696,6 +700,16 @@ const PlayerProfileScreen = ({ route, navigation }) => {
               >
                 <Text style={styles.giftCancelButtonText}>Отмена</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.giftSendButton, sendingGift && styles.giftSendButtonDisabled]}
+                onPress={handleSendGift}
+                disabled={sendingGift}
+              >
+                <Text style={styles.giftSendButtonText}>
+                  {sendingGift ? 'Отправка...' : 'Подарить'}
+                </Text>
+              </TouchableOpacity>
+              
             </View>
           </View>
         </View>
