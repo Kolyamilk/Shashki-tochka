@@ -579,15 +579,6 @@ const ProfileScreen = ({ navigation }) => {
 
             <View style={styles.reportButtons}>
               <TouchableOpacity
-                style={[styles.reportSendButton, sendingReport && styles.reportSendButtonDisabled]}
-                onPress={handleSendReport}
-                disabled={sendingReport}
-              >
-                <Text style={styles.reportSendButtonText}>
-                  {sendingReport ? 'Отправка...' : 'Отправить'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={styles.reportCancelButton}
                 onPress={() => {
                   setReportModalVisible(false);
@@ -597,6 +588,16 @@ const ProfileScreen = ({ navigation }) => {
               >
                 <Text style={styles.reportCancelButtonText}>Отмена</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.reportSendButton, sendingReport && styles.reportSendButtonDisabled]}
+                onPress={handleSendReport}
+                disabled={sendingReport}
+              >
+                <Text style={styles.reportSendButtonText}>
+                  {sendingReport ? 'Отправка...' : 'Отправить'}
+                </Text>
+              </TouchableOpacity>
+              
             </View>
           </View>
         </View>

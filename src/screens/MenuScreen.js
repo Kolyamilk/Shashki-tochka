@@ -1,6 +1,6 @@
 // src/screens/MenuScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get, onValue, off } from 'firebase/database';
@@ -22,20 +22,61 @@ const MenuScreen = ({ navigation }) => {
   const [onlineCount, setOnlineCount] = useState(0);
   const [hasNewGifts, setHasNewGifts] = useState(false);
   const [latestGiftEmoji, setLatestGiftEmoji] = useState('');
+  const [loadingTopPlayers, setLoadingTopPlayers] = useState(false);
+  const [loadingUserData, setLoadingUserData] = useState(false);
+  const [isConnected, setIsConnected] = useState(null); // null = проверяется, true = подключен, false = нет связи
+  const [checkingConnection, setCheckingConnection] = useState(false);
 
-  // Загружаем данные текущего пользователя
-  const fetchUserData = useCallback(async () => {
+  // Проверка подключения к Firebase
+  const checkConnection = useCallback(async () => {
     if (!userId) return;
-    const userRef = ref(db, `users/${userId}`);
-    const snapshot = await get(userRef);
-    if (snapshot.exists()) {
-      setUserData(snapshot.val());
+    setCheckingConnection(true);
+    try {
+      // Пробуем загрузить данные пользователя как тест подключения
+      const userRef = ref(db, `users/${userId}`);
+      const userSnapshot = await get(userRef);
+
+      if (userSnapshot.exists()) {
+        setIsConnected(true);
+        setUserData(userSnapshot.val());
+      } else {
+        // Пользователь существует, но данных нет - все равно подключение есть
+        setIsConnected(true);
+      }
+    } catch (error) {
+      console.error('Ошибка подключения:', error);
+      setIsConnected(false);
+    } finally {
+      setCheckingConnection(false);
     }
   }, [userId]);
 
+  // Проверяем подключение при первой загрузке
+  useEffect(() => {
+    checkConnection();
+  }, [checkConnection]);
+
+  // Загружаем данные текущего пользователя
+  const fetchUserData = useCallback(async () => {
+    if (!userId || !isConnected) return;
+    setLoadingUserData(true);
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+      if (snapshot.exists()) {
+        setUserData(snapshot.val());
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных пользователя:', error);
+      setIsConnected(false);
+    } finally {
+      setLoadingUserData(false);
+    }
+  }, [userId, isConnected]);
+
   // Подписка на изменения данных пользователя (для обновления имени)
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !isConnected) return;
     const userRef = ref(db, `users/${userId}`);
     const unsubscribe = onValue(userRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -57,12 +98,17 @@ const MenuScreen = ({ navigation }) => {
           }
         }
       }
+    }, (error) => {
+      console.error('Ошибка подписки на данные пользователя:', error);
+      setIsConnected(false);
     });
     return () => off(userRef);
-  }, [userId]);
+  }, [userId, isConnected]);
 
   // Загружаем топ-3 игроков
   const fetchTopPlayers = useCallback(async () => {
+    if (!isConnected) return;
+    setLoadingTopPlayers(true);
     try {
       const usersRef = ref(db, 'users');
       const snapshot = await get(usersRef);
@@ -77,9 +123,12 @@ const MenuScreen = ({ navigation }) => {
         setTopPlayers(sorted.slice(0, 3));
       }
     } catch (error) {
-      console.error(error);
+      console.error('Ошибка загрузки топ игроков:', error);
+      setIsConnected(false);
+    } finally {
+      setLoadingTopPlayers(false);
     }
-  }, []);
+  }, [isConnected]);
 
   // Загружаем только при первом фокусе
   useFocusEffect(
@@ -87,9 +136,12 @@ const MenuScreen = ({ navigation }) => {
       // Пересоздаём подписку на приглашения при возврате на главный экран
       resetInviteFlags();
 
-      if (!userData) fetchUserData();
-      if (topPlayers.length === 0) fetchTopPlayers();
-    }, [userData, topPlayers.length, fetchUserData, fetchTopPlayers, resetInviteFlags])
+      // Загружаем данные только если подключены
+      if (isConnected) {
+        if (!userData && !loadingUserData) fetchUserData();
+        if (topPlayers.length === 0 && !loadingTopPlayers) fetchTopPlayers();
+      }
+    }, [isConnected, userData, topPlayers.length, loadingUserData, loadingTopPlayers, fetchUserData, fetchTopPlayers, resetInviteFlags])
   );
 
   // ← ← ← ИСПРАВЛЕННЫЙ useEffect для подсчета онлайн
@@ -115,6 +167,10 @@ const MenuScreen = ({ navigation }) => {
         setOnlineUsers([]);
         setOnlineCount(0);
       }
+    }, (error) => {
+      console.error('Ошибка подписки на статус онлайн:', error);
+      setOnlineUsers([]);
+      setOnlineCount(0);
     });
 
     return () => {
@@ -133,6 +189,19 @@ const MenuScreen = ({ navigation }) => {
         <Text style={[styles.topLevel, { color: levelColor }]}>Ур. {level}</Text>
       </View>
     );
+  };
+
+  // Обработчик для кнопки "Найти соперника"
+  const handleFindOpponent = () => {
+    if (!isConnected) {
+      Alert.alert(
+        'Требуется интернет',
+        'Для игры с соперником необходимо подключение к интернету',
+        [{ text: 'Понятно' }]
+      );
+      return;
+    }
+    navigation.navigate('OnlineGameSetup');
   };
 
   return (
@@ -158,15 +227,49 @@ const MenuScreen = ({ navigation }) => {
         {/* Заголовок */}
         <View style={styles.headerSection}>
           <Text style={styles.title}>Шашки и точка</Text>
+
+          {/* Индикатор подключения */}
+          {isConnected === false && (
+            <View style={styles.connectionWarning}>
+              <Text style={styles.connectionWarningText}>⚠️ Нет подключения к интернету</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={checkConnection}
+                disabled={checkingConnection}
+              >
+                <Text style={styles.retryButtonText}>
+                  {checkingConnection ? 'Проверка...' : '🔄 Проверить подключение'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Кнопки меню */}
-        <View style={styles.centerContainer}>
+        {isConnected === null ? (
+          // Показываем загрузку при проверке подключения
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.checkingText}>Проверка подключения...</Text>
+          </View>
+        ) : (
+          // Показываем кнопки меню всегда (офлайн и онлайн)
+          <View style={styles.centerContainer}>
           {/* Кнопка ежедневных заданий */}
           {getCompletedCount() === 3 ? (
             <TouchableOpacity
-              style={[styles.button, styles.tasksButtonCompleted]}
-              onPress={() => navigation.navigate('DailyTasks')}
+              style={[
+                styles.button,
+                styles.tasksButtonCompleted,
+                !isConnected && styles.disabledButton
+              ]}
+              onPress={() => {
+                if (!isConnected) {
+                  Alert.alert('Требуется интернет', 'Для доступа к заданиям необходимо подключение к интернету');
+                  return;
+                }
+                navigation.navigate('DailyTasks');
+              }}
               activeOpacity={0.8}
             >
               <View style={styles.completedTasksContent}>
@@ -181,22 +284,38 @@ const MenuScreen = ({ navigation }) => {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.button, styles.tasksButton]}
-              onPress={() => navigation.navigate('DailyTasks')}
+              style={[
+                styles.button,
+                styles.tasksButton,
+                !isConnected && styles.disabledButton
+              ]}
+              onPress={() => {
+                if (!isConnected) {
+                  Alert.alert('Требуется интернет', 'Для доступа к заданиям необходимо подключение к интернету');
+                  return;
+                }
+                navigation.navigate('DailyTasks');
+              }}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonText}>
-                📋 Задачи на сегодня ({getCompletedCount()}/3)
+                {!isConnected ? '🔒 Задачи на сегодня' : `📋 Задачи на сегодня (${getCompletedCount()}/3)`}
               </Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
-            onPress={() => navigation.navigate('OnlineGameSetup')}
+            style={[
+              styles.button,
+              styles.primaryButton,
+              !isConnected && styles.disabledButton
+            ]}
+            onPress={handleFindOpponent}
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>🎯 Найти соперника</Text>
+            <Text style={styles.buttonText}>
+              {!isConnected ? '🔒 Найти соперника (требуется интернет)' : '🎯 Найти соперника'}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -215,10 +334,11 @@ const MenuScreen = ({ navigation }) => {
             <Text style={styles.buttonText}>👥 Локальная игра</Text>
           </TouchableOpacity>
         </View>
+        )}
 
         {/* Топ-3 игроков */}
         {topPlayers.length > 0 && (
-          <View style={styles.topContainer}>
+          <View style={[styles.topContainer, !isConnected && styles.blurredSection]}>
             <Text style={styles.topTitle}>🏆 Топ-3 игроков</Text>
             <View style={styles.topPlayersList}>
               <FlatList
@@ -230,11 +350,22 @@ const MenuScreen = ({ navigation }) => {
             </View>
             <TouchableOpacity
               style={styles.showAllButton}
-              onPress={() => navigation.navigate('Leaderboard')}
+              onPress={() => {
+                if (!isConnected) {
+                  Alert.alert('Требуется интернет', 'Для просмотра рейтинга необходимо подключение к интернету');
+                  return;
+                }
+                navigation.navigate('Leaderboard');
+              }}
               activeOpacity={0.8}
             >
               <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
             </TouchableOpacity>
+            {!isConnected && (
+              <View style={styles.offlineOverlay}>
+                <Text style={styles.offlineOverlayText}>🔒 Требуется интернет</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -259,7 +390,12 @@ const MenuScreen = ({ navigation }) => {
                   )}
                 </View>
                 <View style={styles.userInfo}>
-                  <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
+                  <View style={styles.userNameRow}>
+                    <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
+                    {isConnected && (
+                      <View style={styles.connectionIndicator} />
+                    )}
+                  </View>
                   <View style={styles.levelContainer}>
                     <Text style={[styles.levelText, { color: getLevelColor(getLevelFromExp(userData.stats?.exp || 0).level) }]}>
                       Ур. {getLevelFromExp(userData.stats?.exp || 0).level}
@@ -345,6 +481,45 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
+  connectionWarning: {
+    backgroundColor: 'rgba(231, 76, 60, 0.2)',
+    borderWidth: 2,
+    borderColor: '#e74c3c',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    alignItems: 'center',
+    width: '90%',
+  },
+  connectionWarningText: {
+    color: '#e74c3c',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#e74c3c',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  checkingText: {
+    color: colors.textLight,
+    fontSize: 16,
+    marginTop: 12,
+  },
+  offlineMessage: {
+    color: '#aaa',
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
   /* Кнопки меню */
   centerContainer: {
     alignItems: 'center',
@@ -420,11 +595,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  disabledButton: {
+    opacity: 0.5,
+    backgroundColor: '#555',
+  },
 
   /* Топ-3 игроков */
   topContainer: {
     paddingHorizontal: 20,
     marginBottom: 30,
+    position: 'relative',
+  },
+  blurredSection: {
+    opacity: 0.5,
+  },
+  offlineOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 20,
+    right: 20,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  offlineOverlayText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   topTitle: {
     fontSize: 18,
@@ -555,11 +754,22 @@ const styles = StyleSheet.create({
   userInfo: {
     flexDirection: 'column',
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   userName: {
     fontSize: 15,
     fontWeight: '600',
     color: '#fff',
     maxWidth: 120,
+  },
+  connectionIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4ECDC4',
+    marginLeft: 6,
   },
   levelContainer: {
     marginTop: 2,
