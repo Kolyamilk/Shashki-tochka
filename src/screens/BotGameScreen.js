@@ -197,6 +197,12 @@ const BotGameScreen = ({ route, navigation }) => {
                 } else if (difficulty === 'medium') {
                   await updateProgress(TASK_TYPES.WIN_BOT_MEDIUM, 1);
                 }
+                // Отслеживание побед по типу игры
+                if (gameType === 'giveaway') {
+                  await updateProgress(TASK_TYPES.WIN_BOT_GIVEAWAY, 1, gameType);
+                } else {
+                  await updateProgress(TASK_TYPES.WIN_BOT_CLASSIC, 1);
+                }
               }
               if (gameType === 'giveaway') {
                 await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, gameType);

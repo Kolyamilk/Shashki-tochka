@@ -91,12 +91,12 @@ const DailyTasksScreen = ({ navigation }) => {
 
   const handleTokenRefresh = async () => {
     if (showRefreshModal) return;
+    setShowTokenModal(false); // Закрываем модалку с жетоном
     setShowRefreshModal(true);
     await new Promise(resolve => setTimeout(resolve, 2000));
     const success = await refreshWithToken();
     setShowRefreshModal(false);
     if (success) {
-      setShowTokenModal(false);
       setTokenCount(prev => prev - 1);
     }
   };

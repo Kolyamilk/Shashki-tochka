@@ -10,6 +10,9 @@ export const TASK_TYPES = {
   LOSE_BOT: 'lose_bot',
   WIN_BOT_HARD: 'win_bot_hard',
   WIN_BOT_MEDIUM: 'win_bot_medium',
+  WIN_BOT_GIVEAWAY: 'win_bot_giveaway',
+  WIN_BOT_CLASSIC: 'win_bot_classic',
+  PLAY_LOCAL: 'play_local',
   CAPTURE_PIECES: 'capture_pieces',
   WIN_GIVEAWAY: 'win_giveaway',
   PLAY_GIVEAWAY: 'play_giveaway',
@@ -188,6 +191,30 @@ const TASK_TEMPLATES = [
     icon: '🎯',
   },
   {
+    id: 'win_bot_giveaway',
+    type: TASK_TYPES.WIN_BOT_GIVEAWAY,
+    title: 'Мастер поддавков против бота',
+    description: 'Выиграйте у бота в режиме "Поддавки"',
+    target: 1,
+    icon: '🎯',
+  },
+  {
+    id: 'win_bot_classic',
+    type: TASK_TYPES.WIN_BOT_CLASSIC,
+    title: 'Классический победитель',
+    description: 'Выиграйте у бота в "Русские шашки"',
+    target: 1,
+    icon: '♟️',
+  },
+  {
+    id: 'play_local',
+    type: TASK_TYPES.PLAY_LOCAL,
+    title: 'Локальная дуэль',
+    description: 'Сыграйте в локальную игру на одном телефоне',
+    target: 1,
+    icon: '📱',
+  },
+  {
     id: 'win_streak_2',
     type: TASK_TYPES.WIN_STREAK,
     title: 'Победная серия',
@@ -226,7 +253,7 @@ const shuffleWithSeed = (items, seed) => {
 
 // Номер версии генератора ежедневных заданий.
 // Увеличивайте, когда шаблоны или логика выбора меняются.
-export const DAILY_TASKS_VERSION = 4;
+export const DAILY_TASKS_VERSION = 5;
 
 // Награда за выполнение задания
 export const TASK_REWARD = 100;

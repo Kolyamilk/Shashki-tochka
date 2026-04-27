@@ -4,6 +4,8 @@ import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import Board from '../components/Board';
 import { useSettings } from '../context/SettingsContext';
 import { useGameType } from '../context/GameTypeContext';
+import { useAuth } from '../context/AuthContext';
+import { useDailyTasks } from '../context/DailyTasksContext';
 import {
   initialBoard,
   getValidMovesForPiece,
@@ -18,6 +20,8 @@ import { colors } from '../styles/globalStyles';
 const LocalGameScreen = ({ navigation }) => {
   const { myPieceColor, opponentPieceColor } = useSettings();
   const { gameType } = useGameType();
+  const { userId } = useAuth();
+  const { updateProgress, TASK_TYPES } = useDailyTasks();
 
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -30,6 +34,7 @@ const LocalGameScreen = ({ navigation }) => {
   const [pendingMove, setPendingMove] = useState(null);
 
   const isAnimatingRef = useRef(false);
+  const gameStartedRef = useRef(false);
 
   // Подсчёт съеденных шашек
   const initialPiecesCount = 12;
@@ -40,9 +45,20 @@ const LocalGameScreen = ({ navigation }) => {
 
   // Проверка окончания игры
   useEffect(() => {
-    const endGame = (resultMessage) => {
+    const endGame = async (resultMessage) => {
       if (gameOver) return;
       setGameOver(true);
+
+      // Отслеживаем локальную игру только если пользователь авторизован
+      if (userId && gameStartedRef.current) {
+        try {
+          await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+          await updateProgress(TASK_TYPES.PLAY_LOCAL, 1);
+        } catch (error) {
+          console.error('Ошибка отслеживания локальной игры:', error);
+        }
+      }
+
       Alert.alert('Игра окончена', resultMessage, [
         { text: 'Ок', onPress: () => navigation.goBack() }
       ]);
@@ -138,6 +154,11 @@ const LocalGameScreen = ({ navigation }) => {
 
   const handleSelectCell = (row, col) => {
     if (gameOver || animatingMove || isAnimatingRef.current) return;
+
+    // Отмечаем, что игра началась (первый ход)
+    if (!gameStartedRef.current) {
+      gameStartedRef.current = true;
+    }
 
     // Проверяем, что клетка игровая (темная)
     const isPlayableCell = (row + col) % 2 === 1;
