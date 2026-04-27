@@ -177,24 +177,46 @@ const BotGameScreen = ({ route, navigation }) => {
           // Обновляем прогресс ежедневных заданий
           console.log('📋 Обновление прогресса заданий:', { winner, gameType, isFakeOpponent });
 
-          if (winner === 1) {
-            // Победа
-            await updateProgress(TASK_TYPES.WIN_GAMES, 1);
-            if (isFakeOpponent) {
-              await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
-            } else {
-              await updateProgress(TASK_TYPES.WIN_BOT, 1);
-              if (difficulty === 'hard' || difficulty === 'grandmaster') {
-                await updateProgress(TASK_TYPES.WIN_BOT_HARD, 1);
+          // Обновление серии побед
+          try {
+            const userRef = ref(db, `users/${userId}`);
+            const userSnap = await get(userRef);
+            const userData = userSnap.val() || {};
+            const currentStreak = userData.winStreak || 0;
+
+            if (winner === 1) {
+              // Победа - увеличиваем серию
+              const newStreak = currentStreak + 1;
+              await update(userRef, { winStreak: newStreak });
+              console.log(`🔥 Серия побед: ${newStreak}`);
+
+              await updateProgress(TASK_TYPES.WIN_GAMES, 1);
+              await updateProgress(TASK_TYPES.WIN_STREAK, newStreak);
+              if (isFakeOpponent) {
+                await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
+              } else {
+                await updateProgress(TASK_TYPES.WIN_BOT, 1);
+                if (difficulty === 'hard' || difficulty === 'grandmaster') {
+                  await updateProgress(TASK_TYPES.WIN_BOT_HARD, 1);
+                }
+              }
+              if (gameType === 'giveaway') {
+                await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, gameType);
+              }
+            } else if (winner === 2) {
+              // Поражение - сбрасываем серию
+              if (currentStreak > 0) {
+                await update(userRef, { winStreak: 0 });
+                console.log('💔 Серия побед сброшена');
+              }
+              if (!isFakeOpponent) {
+                await updateProgress(TASK_TYPES.LOSE_BOT, 1);
               }
             }
-            if (gameType === 'giveaway') {
-              await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, gameType);
-            }
-          } else if (winner === 2 && !isFakeOpponent) {
-            // Поражение от настоящего бота
-            await updateProgress(TASK_TYPES.LOSE_BOT, 1);
+          } catch (error) {
+            console.error('Ошибка обновления серии побед:', error);
           }
+
           // Сыгранная игра (независимо от результата)
           await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
           if (isFakeOpponent) {

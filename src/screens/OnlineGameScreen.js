@@ -198,13 +198,36 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
   if (!(isSurrender && !isWin)) {
     console.log('📋 Обновление прогресса заданий для игрока:', isWin ? 'победитель' : 'проигравший (не сдался)');
 
-    if (isWin) {
-      await updateProgress(TASK_TYPES.WIN_GAMES, 1);
-      await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
-      if (gameData?.gameType === 'giveaway') {
-        await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, 'giveaway');
+    // Обновление серии побед
+    try {
+      const userRef = ref(db, `users/${playerKey}`);
+      const userSnap = await get(userRef);
+      const userData = userSnap.val() || {};
+      const currentStreak = userData.winStreak || 0;
+
+      if (isWin) {
+        const newStreak = currentStreak + 1;
+        await update(userRef, { winStreak: newStreak });
+        console.log(`🔥 Серия побед: ${newStreak}`);
+
+        // Обновляем задания
+        await updateProgress(TASK_TYPES.WIN_GAMES, 1);
+        await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
+        await updateProgress(TASK_TYPES.WIN_STREAK, newStreak);
+        if (gameData?.gameType === 'giveaway') {
+          await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, 'giveaway');
+        }
+      } else {
+        // Проигрыш - сбрасываем серию
+        if (currentStreak > 0) {
+          await update(userRef, { winStreak: 0 });
+          console.log('💔 Серия побед сброшена');
+        }
       }
+    } catch (error) {
+      console.error('Ошибка обновления серии побед:', error);
     }
+
     // Сыгранная игра (независимо от результата, но только если не сдался)
     await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
     await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
@@ -411,16 +434,71 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
         let expGained = 0;
         let oldExp = 0;
         let opponentLeft = false;
+
+        // Получаем текущий опыт игрока
+        const myStatsRef = ref(db, `users/${playerKey}/stats`);
+        const myStatsSnap = await get(myStatsRef);
+        const myStats = myStatsSnap.val() || { exp: 0 };
+        oldExp = myStats.exp || 0;
+
         if (data.surrendered) {
           opponentLeft = true;
           if (isWin) {
-            const myStatsRef = ref(db, `users/${playerKey}/stats`);
-            const myStatsSnap = await get(myStatsRef);
-            const myStats = myStatsSnap.val() || { exp: 0 };
-            oldExp = myStats.exp || 0;
             expGained = EXP_REWARDS.WIN_ONLINE;
           }
         }
+
+        // Обновляем задания для обоих игроков (кроме сдавшегося)
+        const isSurrendered = data.surrendered === playerKey;
+        if (!isSurrendered) {
+          console.log('📋 Обновление прогресса заданий (из Firebase listener):', { isWin, isSurrendered });
+
+          // Обновление серии побед
+          try {
+            const userRef = ref(db, `users/${playerKey}`);
+            const userSnap = await get(userRef);
+            const userData = userSnap.val() || {};
+            const currentStreak = userData.winStreak || 0;
+
+            if (isWin) {
+              const newStreak = currentStreak + 1;
+              await update(userRef, { winStreak: newStreak });
+              console.log(`🔥 Серия побед: ${newStreak}`);
+
+              await updateProgress(TASK_TYPES.WIN_GAMES, 1);
+              await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
+              await updateProgress(TASK_TYPES.WIN_STREAK, newStreak);
+              if (gameData?.gameType === 'giveaway') {
+                await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, 'giveaway');
+              }
+            } else {
+              // Проигрыш - сбрасываем серию
+              if (currentStreak > 0) {
+                await update(userRef, { winStreak: 0 });
+                console.log('💔 Серия побед сброшена');
+              }
+            }
+          } catch (error) {
+            console.error('Ошибка обновления серии побед:', error);
+          }
+
+          // Сыгранная игра (независимо от результата)
+          await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+          await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
+          await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+          if (gameData?.gameType === 'giveaway') {
+            await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
+          }
+
+          // Подсчёт съеденных шашек
+          const myCaptured = myRole === 1 ? captured.black : captured.white;
+          if (myCaptured > 0) {
+            await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
+          }
+        } else {
+          console.log('⏭️ Пропускаем задания (игрок сдался)');
+        }
+
         setVictoryData({ isWin, expGained, oldExp, opponentLeft });
         setVictoryModalVisible(true);
         return;

@@ -274,8 +274,17 @@ export const updateTaskProgress = (tasks, taskType, increment = 1, gameType = nu
     }
 
     if (shouldUpdate) {
-      const newProgress = Math.min(task.progress + increment, task.target);
-      console.log(`  ✅ Обновление: ${task.progress} + ${increment} = ${newProgress} / ${task.target}`);
+      let newProgress;
+
+      // Для WIN_STREAK используем текущее значение серии, а не инкремент
+      if (taskType === TASK_TYPES.WIN_STREAK) {
+        newProgress = Math.min(increment, task.target);
+        console.log(`  ✅ Обновление серии: ${increment} / ${task.target}`);
+      } else {
+        newProgress = Math.min(task.progress + increment, task.target);
+        console.log(`  ✅ Обновление: ${task.progress} + ${increment} = ${newProgress} / ${task.target}`);
+      }
+
       return {
         ...task,
         progress: newProgress,
