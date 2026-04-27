@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  ScrollView,
 } from 'react-native';
 import { ref, get, push, set, remove, onValue, off, update } from 'firebase/database';
 import { db } from '../firebase/config';
@@ -17,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { sendPushNotification } from '../utils/notifications';
 import { useInvite } from '../context/InviteContext';
 import { getLevelFromExp } from '../utils/levelSystem';
+import { getAvailableGifts, TASK_REFRESH_GIFT, RARITY_COLORS, RARITY_NAMES } from '../utils/giftSystem';
 
 const PlayerProfileScreen = ({ route, navigation }) => {
   const { playerId } = route.params;
@@ -35,7 +37,9 @@ const PlayerProfileScreen = ({ route, navigation }) => {
   });
   const [hasPendingInvite, setHasPendingInvite] = useState(false);
   const [giftModalVisible, setGiftModalVisible] = useState(false);
+  const [giftListModalVisible, setGiftListModalVisible] = useState(false);
   const [myTokens, setMyTokens] = useState(0);
+  const [myGifts, setMyGifts] = useState([]);
   const [giftAmount, setGiftAmount] = useState('');
   const [sendingGift, setSendingGift] = useState(false);
 
@@ -110,6 +114,23 @@ const PlayerProfileScreen = ({ route, navigation }) => {
         if (myUserSnap.exists()) {
           const myData = myUserSnap.val();
           setMyTokens(myData.taskRefreshTokens || 0);
+
+          // Загружаем список подарков текущего пользователя
+          const myLevel = getLevelFromExp(myData.stats?.exp || 0).level;
+          const availableGifts = getAvailableGifts(myLevel);
+          const soldGifts = myData.soldGifts || [];
+          const userGiftsList = availableGifts.filter(gift => !soldGifts.includes(gift.id));
+
+          // Добавляем жетоны в начало списка, если есть
+          const tokens = myData.taskRefreshTokens || 0;
+          if (tokens > 0) {
+            userGiftsList.unshift({
+              ...TASK_REFRESH_GIFT,
+              count: tokens,
+            });
+          }
+
+          setMyGifts(userGiftsList);
         }
 
         await checkSentInvite();
@@ -361,8 +382,79 @@ const PlayerProfileScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleSendGift = async () => {
+    const amount = parseInt(giftAmount);
+
+    if (!amount || amount <= 0) {
+      Alert.alert('Ошибка', 'Введите корректное количество жетонов');
+      return;
+    }
+
+    if (amount > myTokens) {
+      Alert.alert('Ошибка', `У вас недостаточно жетонов. Доступно: ${myTokens}`);
+      return;
+    }
+
+    setSendingGift(true);
+    try {
+      // Получаем актуальные данные обоих пользователей
+      const myUserRef = ref(db, `users/${userId}`);
+      const myUserSnap = await get(myUserRef);
+      const myData = myUserSnap.val() || {};
+      const myCurrentTokens = myData.taskRefreshTokens || 0;
+
+      const playerUserRef = ref(db, `users/${playerId}`);
+      const playerUserSnap = await get(playerUserRef);
+      const playerData = playerUserSnap.val() || {};
+      const playerCurrentTokens = playerData.taskRefreshTokens || 0;
+
+      // Проверяем еще раз
+      if (amount > myCurrentTokens) {
+        Alert.alert('Ошибка', 'У вас недостаточно жетонов');
+        setSendingGift(false);
+        return;
+      }
+
+      // Обновляем жетоны
+      await update(myUserRef, {
+        taskRefreshTokens: myCurrentTokens - amount,
+      });
+
+      await update(playerUserRef, {
+        taskRefreshTokens: playerCurrentTokens + amount,
+      });
+
+      setMyTokens(myCurrentTokens - amount);
+      setGiftAmount('');
+      setGiftModalVisible(false);
+
+      Alert.alert('Успешно!', `Вы подарили ${amount} жетонов игроку ${playerData.name || 'Игрок'}`);
+    } catch (error) {
+      console.error('Ошибка отправки подарка:', error);
+      Alert.alert('Ошибка', 'Не удалось отправить подарок. Попробуйте позже.');
+    } finally {
+      setSendingGift(false);
+    }
+  };
+
   const sendGift = () => {
-    Alert.alert('Подарок', 'Функция в разработке.');
+    if (myGifts.length === 0) {
+      Alert.alert('Нет подарков', 'У вас нет подарков для отправки. Получайте подарки за повышение уровня!');
+      return;
+    }
+    setGiftListModalVisible(true);
+  };
+
+  const handleGiftSelect = (gift) => {
+    if (gift.type === 'consumable') {
+      // Если это жетон, открываем модалку выбора количества
+      setGiftListModalVisible(false);
+      setGiftAmount('1');
+      setGiftModalVisible(true);
+    } else {
+      // Для обычных подарков показываем сообщение
+      Alert.alert('Недоступно', 'Пока можно отправлять только жетоны обновления заданий');
+    }
   };
 
   if (loading) {
@@ -483,6 +575,131 @@ const PlayerProfileScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Модальное окно списка подарков */}
+      <Modal
+        visible={giftListModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setGiftListModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.giftListModalContent}>
+            <Text style={styles.modalTitle}>🎁 Выберите подарок</Text>
+            <Text style={styles.modalSubtitle}>
+              Получатель: {playerData?.name || 'Игрок'}
+            </Text>
+
+            <ScrollView style={styles.giftListContainer} showsVerticalScrollIndicator={false}>
+              {myGifts.map((gift, index) => (
+                <TouchableOpacity
+                  key={`${gift.id}-${index}`}
+                  style={[
+                    styles.giftListItem,
+                    { borderColor: RARITY_COLORS[gift.rarity] }
+                  ]}
+                  onPress={() => handleGiftSelect(gift)}
+                >
+                  <View style={[
+                    styles.giftListEmojiContainer,
+                    { backgroundColor: `${RARITY_COLORS[gift.rarity]}20` }
+                  ]}>
+                    <Text style={styles.giftListEmoji}>{gift.emoji}</Text>
+                  </View>
+                  <View style={styles.giftListInfo}>
+                    <Text style={styles.giftListName}>{gift.name}</Text>
+                    <Text style={[styles.giftListRarity, { color: RARITY_COLORS[gift.rarity] }]}>
+                      {RARITY_NAMES[gift.rarity]}
+                    </Text>
+                  </View>
+                  {gift.count && (
+                    <View style={styles.giftListCountBadge}>
+                      <Text style={styles.giftListCountText}>x{gift.count}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.giftListCloseButton}
+              onPress={() => setGiftListModalVisible(false)}
+            >
+              <Text style={styles.giftListCloseButtonText}>Отмена</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модальное окно отправки подарка */}
+      <Modal
+        visible={giftModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setGiftModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🎁 Отправить жетоны</Text>
+            <Text style={styles.modalHint}>
+              У вас есть жетонов: {myTokens}
+            </Text>
+            <Text style={styles.modalSubHint}>
+              Получатель: {playerData?.name || 'Игрок'}
+            </Text>
+
+            <View style={styles.giftAmountContainer}>
+              <TouchableOpacity
+                style={[styles.giftAmountButton, parseInt(giftAmount) <= 1 && styles.giftAmountButtonDisabled]}
+                onPress={() => {
+                  const current = parseInt(giftAmount) || 0;
+                  if (current > 1) setGiftAmount(String(current - 1));
+                }}
+                disabled={parseInt(giftAmount) <= 1}
+              >
+                <Text style={styles.giftAmountButtonText}>−</Text>
+              </TouchableOpacity>
+
+              <View style={styles.giftAmountDisplay}>
+                <Text style={styles.giftAmountText}>{giftAmount || '0'}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.giftAmountButton, parseInt(giftAmount) >= myTokens && styles.giftAmountButtonDisabled]}
+                onPress={() => {
+                  const current = parseInt(giftAmount) || 0;
+                  if (current < myTokens) setGiftAmount(String(current + 1));
+                }}
+                disabled={parseInt(giftAmount) >= myTokens}
+              >
+                <Text style={styles.giftAmountButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.giftButtons}>
+              <TouchableOpacity
+                style={[styles.giftSendButton, sendingGift && styles.giftSendButtonDisabled]}
+                onPress={handleSendGift}
+                disabled={sendingGift}
+              >
+                <Text style={styles.giftSendButtonText}>
+                  {sendingGift ? 'Отправка...' : 'Подарить'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.giftCancelButton}
+                onPress={() => {
+                  setGiftModalVisible(false);
+                  setGiftAmount('');
+                }}
+                disabled={sendingGift}
+              >
+                <Text style={styles.giftCancelButtonText}>Отмена</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -623,6 +840,197 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     fontSize: 18,
     marginBottom: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  giftListModalContent: {
+    backgroundColor: '#2c3e50',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  giftListContainer: {
+    maxHeight: 400,
+  },
+  giftListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a2a3a',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 2,
+  },
+  giftListEmojiContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  giftListEmoji: {
+    fontSize: 28,
+  },
+  giftListInfo: {
+    flex: 1,
+  },
+  giftListName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textLight,
+    marginBottom: 2,
+  },
+  giftListRarity: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  giftListCountBadge: {
+    backgroundColor: '#4ECDC4',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  giftListCountText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
+  },
+  giftListCloseButton: {
+    backgroundColor: '#6c757d',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  giftListCloseButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  modalContent: {
+    backgroundColor: '#2c3e50',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.textLight,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalHint: {
+    fontSize: 16,
+    color: '#4ECDC4',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalSubHint: {
+    fontSize: 14,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  giftInput: {
+    backgroundColor: '#1a2a3a',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: colors.textLight,
+    borderWidth: 1,
+    borderColor: '#4a5a6a',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  giftAmountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 16,
+  },
+  giftAmountButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#4ECDC4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  giftAmountButtonDisabled: {
+    backgroundColor: '#555',
+    opacity: 0.5,
+  },
+  giftAmountButtonText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
+  },
+  giftAmountDisplay: {
+    minWidth: 80,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#1a2a3a',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+    alignItems: 'center',
+  },
+  giftAmountText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textLight,
+  },
+  giftButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  giftSendButton: {
+    flex: 1,
+    backgroundColor: '#4ECDC4',
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  giftSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  giftSendButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
+  },
+  giftCancelButton: {
+    flex: 1,
+    backgroundColor: '#6c757d',
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  giftCancelButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });
 

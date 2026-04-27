@@ -285,6 +285,15 @@ const ProfileGiftScreen = ({ navigation }) => {
                       </View>
                       <View style={styles.modalButtons}>
                         <TouchableOpacity
+                          style={[styles.modalButton, styles.useButton]}
+                          onPress={() => {
+                            setModalVisible(false);
+                            navigation.navigate('DailyTasks');
+                          }}
+                        >
+                          <Text style={styles.modalButtonText}>📋 Использовать</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
                           style={[styles.modalButton, styles.closeButton]}
                           onPress={() => setModalVisible(false)}
                         >
@@ -552,6 +561,9 @@ const styles = StyleSheet.create({
   },
   sellButton: {
     backgroundColor: '#f39c12',
+  },
+  useButton: {
+    backgroundColor: '#4ECDC4',
   },
   closeButton: {
     backgroundColor: '#555',
