@@ -90,14 +90,22 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   const winnerNewLevel = getLevelFromExp(winnerOldExp + winnerExpGain).level;
   const leveledUp = winnerNewLevel > winnerOldLevel;
   const updateData = { expHistory: winnerHistory };
-  if (leveledUp && winnerNewLevel % 5 === 0) {
-    const winnerUserRef = ref(db, `users/${winnerId}`);
-    const winnerUserSnap = await get(winnerUserRef);
-    const winnerUserData = winnerUserSnap.val() || {};
-    const newGifts = winnerUserData.newGifts || [];
-    const giftId = `gift_level_${winnerNewLevel}`;
-    if (!newGifts.includes(giftId)) {
-      updateData.newGifts = [...newGifts, giftId];
+  let giftAdded = false;
+
+  // Добавляем подарок только если: 1) повысился уровень, 2) новый уровень кратен 5, 3) подарок существует
+  if (leveledUp && winnerNewLevel % 5 === 0 && winnerNewLevel >= 5) {
+    const { LEVEL_GIFTS } = require('../utils/giftSystem');
+    if (LEVEL_GIFTS[winnerNewLevel]) {
+      const winnerUserRef = ref(db, `users/${winnerId}`);
+      const winnerUserSnap = await get(winnerUserRef);
+      const winnerUserData = winnerUserSnap.val() || {};
+      const newGifts = winnerUserData.newGifts || [];
+      const giftId = `gift_level_${winnerNewLevel}`;
+      if (!newGifts.includes(giftId)) {
+        updateData.newGifts = [...newGifts, giftId];
+        giftAdded = true;
+        console.log(`🎁 Добавлен подарок за ${winnerNewLevel} уровень`);
+      }
     }
   }
   await update(ref(db, `users/${winnerId}`), updateData);
@@ -123,7 +131,7 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
     await update(ref(db, `users/${loserId}`), { expHistory: loserHistory });
   }
 
-  return { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain };
+  return { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain, giftAdded };
 };
 
 const OnlineGameScreen = ({ route, navigation }) => {
@@ -144,7 +152,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [myAvatar, setMyAvatar] = useState('');
   const [myLevel, setMyLevel] = useState(1);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
-  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false });
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false });
 
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
@@ -173,6 +181,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
   let expGained = 0;
   let oldExp = 0;
+  let hasNewGift = false;
   const isWin = winnerId === playerKey;
 
   // Показываем алерт если проиграли по таймауту
@@ -186,10 +195,11 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
   if (winnerId && loserId) {
     try {
-      const { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain } = await updateStats(winnerId, loserId, isSurrender);
+      const { winnerOldExp, loserOldExp, winnerExpGain, loserExpGain, giftAdded } = await updateStats(winnerId, loserId, isSurrender);
       if (isWin) {
         expGained = winnerExpGain;
         oldExp = winnerOldExp;
+        hasNewGift = giftAdded || false;
       } else {
         expGained = loserExpGain;
         oldExp = loserOldExp;
@@ -262,7 +272,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     console.log('⏭️ Пропускаем задания для проигравшего (сдался/ушёл)');
   }
 
-  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin });
+  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin, hasNewGift });
   setVictoryModalVisible(true);
 };
 
@@ -603,9 +613,11 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
   // Таймер бездействия - проверяем каждые 10 секунд
   useEffect(() => {
-    if (gameOver || !gameData) return;
+    if (isGameEnding.current || !gameData) return;
 
     const checkInactivity = () => {
+      if (isGameEnding.current) return;
+
       const now = Date.now();
       const timeSinceLastMove = now - lastMoveTimeRef.current;
       const TWO_MINUTES = 2 * 60 * 1000;
@@ -624,7 +636,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     const interval = setInterval(checkInactivity, 10000);
 
     return () => clearInterval(interval);
-  }, [gameOver, gameData, playerKey]);
+  }, [gameData, playerKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -802,6 +814,7 @@ const handleGiveUp = async () => {
         oldExp={victoryData.oldExp}
         onClose={handleVictoryClose}
         opponentLeft={victoryData.opponentLeft || false}
+        hasNewGift={victoryData.hasNewGift || false}
         navigation={navigation}
       />
     </View>

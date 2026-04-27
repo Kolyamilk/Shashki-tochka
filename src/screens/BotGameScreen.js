@@ -52,7 +52,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const [pendingBoard, setPendingBoard] = useState(null);
   const [pendingMove, setPendingMove] = useState(null);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
-  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0 });
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false });
   const [myLevel, setMyLevel] = useState(1);
   const [myName, setMyName] = useState('Вы');
   const [myAvatar, setMyAvatar] = useState('😀');
@@ -128,6 +128,7 @@ const BotGameScreen = ({ route, navigation }) => {
 
       let expGained = 0;
       let oldExp = 0;
+      let hasNewGift = false;
       const isWin = winner === 1;
 
       // Начисление опыта
@@ -278,17 +279,22 @@ const BotGameScreen = ({ route, navigation }) => {
             expHistory: history,
           };
 
-          // Если повысился уровень и это кратно 5, добавляем новый подарок в список непросмотренных
-          if (leveledUp && newLevel % 5 === 0) {
-            const userRef = ref(db, `users/${userId}`);
-            const userSnap = await get(userRef);
-            const userData = userSnap.val() || {};
-            const newGifts = userData.newGifts || [];
+          // Добавляем подарок только если: 1) повысился уровень, 2) новый уровень кратен 5, 3) подарок существует
+          if (leveledUp && newLevel % 5 === 0 && newLevel >= 5) {
+            const { LEVEL_GIFTS } = require('../utils/giftSystem');
+            if (LEVEL_GIFTS[newLevel]) {
+              const userRef = ref(db, `users/${userId}`);
+              const userSnap = await get(userRef);
+              const userData = userSnap.val() || {};
+              const newGifts = userData.newGifts || [];
 
-            // Добавляем ID подарка в список новых, если его там ещё нет
-            const giftId = `gift_level_${newLevel}`;
-            if (!newGifts.includes(giftId)) {
-              updateData.newGifts = [...newGifts, giftId];
+              // Добавляем ID подарка в список новых, если его там ещё нет
+              const giftId = `gift_level_${newLevel}`;
+              if (!newGifts.includes(giftId)) {
+                updateData.newGifts = [...newGifts, giftId];
+                hasNewGift = true;
+                console.log(`🎁 Добавлен подарок за ${newLevel} уровень`);
+              }
             }
           }
 
@@ -311,8 +317,8 @@ const BotGameScreen = ({ route, navigation }) => {
       }
 
       // Показываем модальное окно победы
-      console.log('🎉 Открываем VictoryModal:', { isWin, expGained, oldExp });
-      setVictoryData({ isWin, expGained, oldExp });
+      console.log('🎉 Открываем VictoryModal:', { isWin, expGained, oldExp, hasNewGift });
+      setVictoryData({ isWin, expGained, oldExp, hasNewGift });
       setVictoryModalVisible(true);
     };
 
@@ -736,6 +742,7 @@ const BotGameScreen = ({ route, navigation }) => {
         expGained={victoryData.expGained}
         oldExp={victoryData.oldExp}
         onClose={handleVictoryClose}
+        hasNewGift={victoryData.hasNewGift || false}
         navigation={navigation}
       />
     </View>

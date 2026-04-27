@@ -455,11 +455,29 @@ const ProfileScreen = ({ navigation }) => {
               ) : (
                 expHistory.map((entry, index) => {
                   const date = new Date(entry.timestamp);
-                  const dateStr = date.toLocaleDateString('ru-RU', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  });
+                  const today = new Date();
+                  const yesterday = new Date(today);
+                  yesterday.setDate(yesterday.getDate() - 1);
+
+                  // Сравниваем даты (без учета времени)
+                  const isSameDay = (d1, d2) => {
+                    return d1.getDate() === d2.getDate() &&
+                           d1.getMonth() === d2.getMonth() &&
+                           d1.getFullYear() === d2.getFullYear();
+                  };
+
+                  let dateStr;
+                  if (isSameDay(date, today)) {
+                    dateStr = 'Сегодня';
+                  } else if (isSameDay(date, yesterday)) {
+                    dateStr = 'Вчера';
+                  } else {
+                    dateStr = date.toLocaleDateString('ru-RU', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric'
+                    });
+                  }
 
                   const isWin = entry.result === 'win';
                   const isOpponentLeft = entry.result === 'opponent_left';

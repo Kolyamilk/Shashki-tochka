@@ -8,7 +8,7 @@ import GiftReceivedModal from './GiftReceivedModal';
 import TaskCompletedModal from './TaskCompletedModal';
 import { useDailyTasks } from '../context/DailyTasksContext';
 
-const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation }) => {
+const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation, hasNewGift = false }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -31,10 +31,12 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
 
   useEffect(() => {
     if (visible) {
-      // Проверяем, получил ли игрок подарок
-      if (leveledUp && shouldReceiveGift(newLevelInfo.level)) {
+      // Проверяем, получил ли игрок подарок (используем переданный параметр hasNewGift)
+      if (leveledUp && hasNewGift) {
         const gift = getGiftForLevel(newLevelInfo.level);
-        setReceivedGift(gift);
+        if (gift) {
+          setReceivedGift(gift);
+        }
       }
 
       // Проверяем, есть ли выполненное задание
