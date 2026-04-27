@@ -68,7 +68,6 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture
   };
 
   useEffect(() => {
-    console.log('🎬 AnimatedPiece: запуск анимации', { from, to, deltaX, deltaY });
 
     // Воспроизводим звук в зависимости от типа хода
     if (wasCapture) {
@@ -93,7 +92,6 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture
         useNativeDriver: true,
       }),
     ]).start(() => {
-      console.log('✅ AnimatedPiece: анимация завершена');
       onFinish();
     });
 

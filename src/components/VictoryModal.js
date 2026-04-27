@@ -131,7 +131,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
         >
           {/* Заголовок */}
           <Text style={styles.title}>
-            {playerSurrendered ? '🏳️ Вы решили сдаться' : (opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '💪 Хорошая попытка!'))}
+            {playerSurrendered ? '🏳️ Вы решили сдаться' : (opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '😔 Вы проиграли'))}
           </Text>
 
           {/* Полученный опыт */}

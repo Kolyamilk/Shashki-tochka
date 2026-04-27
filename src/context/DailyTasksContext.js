@@ -71,15 +71,15 @@ export const DailyTasksProvider = ({ children }) => {
   const refreshDailyTasks = useCallback(async () => {
     if (!userId) return;
     if (userLevel < 10) {
-      console.log('⚠️ Refresh blocked: user level too low', { userLevel });
+     
       return;
     }
     if (!canManualRefresh()) {
-      console.log('⚠️ Refresh blocked: 24h not passed yet');
+     
       return;
     }
 
-    console.log('🔄 Принудительное обновление ежедневных заданий');
+    
     const today = getTodayDate();
     const nowTimestamp = Date.now();
 
@@ -108,22 +108,19 @@ export const DailyTasksProvider = ({ children }) => {
       setTasks(newTasks);
       setLastUpdateDate(today);
       setLastManualRefreshTimestamp(nowTimestamp);
-      console.log('✅ Ручное обновление заданий выполнено, следующий раз через 24ч');
     } catch (error) {
-      console.error('Ошибка принудительного обновления заданий:', error);
     }
   }, [userId, tasks, userLevel, canManualRefresh]);
 
   // Загрузка заданий из Firebase (при старте и смене userId)
   useEffect(() => {
     if (!userId) {
-      console.log('⚠️ DailyTasksContext: нет userId, пропуск загрузки');
+
       setLoading(false);
       setUserLevel(1);
       return;
     }
 
-    console.log('📋 DailyTasksContext: начало загрузки заданий для userId:', userId);
 
     const loadTasks = async () => {
       try {
@@ -132,7 +129,6 @@ export const DailyTasksProvider = ({ children }) => {
         const data = snapshot.val();
 
         const today = getTodayDate();
-        console.log('📅 Сегодняшняя дата:', today);
 
         // Преобразуем legacy поле lastManualRefreshDate в timestamp, если нужно
         let refreshTimestamp = null;
@@ -144,7 +140,6 @@ export const DailyTasksProvider = ({ children }) => {
 
         // Если нет данных или сменился день (или версия устарела)
         if (!data || shouldUpdateTasks(data.lastUpdateDate) || data.version !== DAILY_TASKS_VERSION) {
-          console.log('🆕 Генерация новых заданий (новый день или версия)');
           const newTasks = generateDailyTasks(today, null, userId);
           await update(ref(db, `users/${userId}`), {
             dailyTasks: {
@@ -159,7 +154,6 @@ export const DailyTasksProvider = ({ children }) => {
           setLastManualRefreshTimestamp(refreshTimestamp);
         } else {
           // Загружаем существующие задания
-          console.log('📋 Загружены существующие задания:', data.tasks);
           setTasks(data.tasks || []);
           setLastUpdateDate(data.lastUpdateDate);
           setLastManualRefreshTimestamp(refreshTimestamp);
@@ -175,7 +169,7 @@ export const DailyTasksProvider = ({ children }) => {
         console.error('Ошибка загрузки ежедневных заданий:', error);
       } finally {
         setLoading(false);
-        console.log('✅ DailyTasksContext: загрузка завершена');
+        
       }
     };
 
@@ -187,7 +181,6 @@ export const DailyTasksProvider = ({ children }) => {
     if (!pendingReward || !userId) return;
 
     const { task } = pendingReward;
-    console.log('🎉 Задание выполнено:', task);
     setNewlyCompletedTask(task);
 
     (async () => {
@@ -200,7 +193,6 @@ export const DailyTasksProvider = ({ children }) => {
         await update(userStatsRef, { exp: newExp });
         const levelInfo = getLevelFromExp(newExp);
         setUserLevel(levelInfo.level);
-        console.log('✨ Награда за задание начислена:', TASK_REWARD);
       } catch (error) {
         console.error('Ошибка начисления награды за задание:', error);
       }
@@ -212,26 +204,21 @@ export const DailyTasksProvider = ({ children }) => {
   // Обновление прогресса задания (без изменений)
   const updateProgress = async (taskType, increment = 1, gameType = null) => {
     if (!userId) {
-      console.log('⚠️ updateProgress: пропуск (нет userId)', { userId });
       return;
     }
 
-    console.log('📋 updateProgress вызван:', { taskType, increment, gameType });
 
     let updatedTasksForDb = null;
     let newlyCompleted = null;
 
     setTasks(prevTasks => {
       if (prevTasks.length === 0) {
-        console.log('⚠️ updateProgress: нет заданий');
         return prevTasks;
       }
 
-      console.log('📋 Текущие задания:', prevTasks);
 
       const updatedTasks = updateTaskProgress(prevTasks, taskType, increment, gameType);
 
-      console.log('📋 Задания после обновления:', updatedTasks);
 
       newlyCompleted = updatedTasks.find((task, index) =>
         task.completed && !prevTasks[index].completed
@@ -250,7 +237,6 @@ export const DailyTasksProvider = ({ children }) => {
         await update(ref(db, `users/${userId}/dailyTasks`), {
           tasks: updatedTasksForDb,
         });
-        console.log('💾 Прогресс заданий сохранён в Firebase');
       } catch (error) {
         console.error('Ошибка сохранения прогресса заданий:', error);
       }

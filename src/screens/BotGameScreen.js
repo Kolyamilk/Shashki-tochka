@@ -34,12 +34,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const { resetInviteFlags } = useInvite();
   const { updateProgress, TASK_TYPES } = useDailyTasks();
 
-  console.log('🎮 BotGameScreen загружен:', {
-    gameType,
-    userId,
-    hasUpdateProgress: !!updateProgress,
-    hasTASK_TYPES: !!TASK_TYPES
-  });
+
 
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -99,12 +94,11 @@ const BotGameScreen = ({ route, navigation }) => {
       status: 'active',
       startedAt: Date.now(),
     }).catch(console.error);
-    console.log('✅ Создана запись bot_games:', gameId);
 
     return () => {
       if (gameIdRef.current) {
         remove(ref(db, `bot_games/${gameIdRef.current}`)).catch(console.error);
-        console.log('🗑️ Удалена запись bot_games при размонтировании');
+       
       }
     };
   }, [userId, difficulty]);
@@ -115,7 +109,6 @@ const BotGameScreen = ({ route, navigation }) => {
       if (gameOver) return;
       setGameOver(true);
 
-      console.log('🎮 endGame вызван:', { winner, gameType, userId, isTimeout });
 
       // Показываем алерт если проиграли по таймауту
       if (isTimeout && winner === 2) {
@@ -143,12 +136,7 @@ const BotGameScreen = ({ route, navigation }) => {
           const currentWins = stats.wins || 0;
           oldExp = currentExp;
 
-          console.log('📊 Начисление опыта:', {
-            oldExp,
-            difficulty,
-            winner,
-            statsFromDB: stats
-          });
+         
 
           if (winner === 1) {
             // Победа игрока
@@ -183,10 +171,8 @@ const BotGameScreen = ({ route, navigation }) => {
 
           await update(userStatsRef, updatedStats);
 
-          console.log(`✨ Начислено ${expGained} опыта. Было: ${oldExp}, стало: ${oldExp + expGained}`);
 
           // Обновляем прогресс ежедневных заданий
-          console.log('📋 Обновление прогресса заданий:', { winner, gameType, isFakeOpponent });
 
           // Обновление серии побед
           try {
@@ -199,7 +185,6 @@ const BotGameScreen = ({ route, navigation }) => {
               // Победа - увеличиваем серию
               const newStreak = currentStreak + 1;
               await update(userRef, { winStreak: newStreak });
-              console.log(`🔥 Серия побед: ${newStreak}`);
 
               await updateProgress(TASK_TYPES.WIN_GAMES, 1);
               await updateProgress(TASK_TYPES.WIN_STREAK, newStreak);
@@ -218,7 +203,6 @@ const BotGameScreen = ({ route, navigation }) => {
               // Поражение - сбрасываем серию
               if (currentStreak > 0) {
                 await update(userRef, { winStreak: 0 });
-                console.log('💔 Серия побед сброшена');
               }
               if (!isFakeOpponent) {
                 await updateProgress(TASK_TYPES.LOSE_BOT, 1);
@@ -245,7 +229,6 @@ const BotGameScreen = ({ route, navigation }) => {
             await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
           }
 
-          console.log('✅ Прогресс заданий обновлён');
 
           // Сохраняем историю начисления опыта
           const expHistoryRef = ref(db, `users/${userId}/expHistory`);
@@ -293,14 +276,12 @@ const BotGameScreen = ({ route, navigation }) => {
               if (!newGifts.includes(giftId)) {
                 updateData.newGifts = [...newGifts, giftId];
                 hasNewGift = true;
-                console.log(`🎁 Добавлен подарок за ${newLevel} уровень`);
               }
             }
           }
 
           await update(ref(db, `users/${userId}`), updateData);
 
-          console.log(`✨ Начислено ${expGained} опыта`);
         } catch (error) {
           console.error('Ошибка начисления опыта:', error);
         }
@@ -317,7 +298,6 @@ const BotGameScreen = ({ route, navigation }) => {
       }
 
       // Показываем модальное окно победы
-      console.log('🎉 Открываем VictoryModal:', { isWin, expGained, oldExp, hasNewGift });
       setVictoryData({ isWin, expGained, oldExp, hasNewGift });
       setVictoryModalVisible(true);
     };
@@ -362,7 +342,6 @@ const BotGameScreen = ({ route, navigation }) => {
 
     if (furtherCaptures.length > 0 && wasCapture) {
       // ← ← ← ЕСТЬ дальнейшие взятия – продолжаем серию
-      console.log('🔁 Продолжение серии взятий');
       setCurrentPiecePos({ row: move.toRow, col: move.toCol });
       
       if (currentPlayer === 1) {
@@ -377,7 +356,6 @@ const BotGameScreen = ({ route, navigation }) => {
     } else {
       // ← ← ← НЕТ дальнейших взятий – переключаем игрока
       const nextPlayer = currentPlayer === 1 ? 2 : 1;
-      console.log('🔄 Переключаем игрока: Игрок', currentPlayer, '→ Игрок', nextPlayer);
       
       setCurrentPlayer(nextPlayer);
       
@@ -393,7 +371,6 @@ const BotGameScreen = ({ route, navigation }) => {
       // ← ← ← НОВОЕ: Триггерим ход бота если сейчас его очередь
       if (nextPlayer === 2) {
         botTurnTriggerRef.current += 1;
-        console.log('🤖 Триггер хода бота:', botTurnTriggerRef.current);
       }
     }
 
@@ -402,7 +379,6 @@ const BotGameScreen = ({ route, navigation }) => {
   };
 
   const applyMove = (move) => {
-    console.log('🎯 Применяем ход:', move);
 
     // Обновляем время последнего хода
     lastMoveTimeRef.current = Date.now();
@@ -413,7 +389,7 @@ const BotGameScreen = ({ route, navigation }) => {
     const newBoard = board.map(r => [...r]);
     const piece = newBoard[move.fromRow]?.[move.fromCol];
     if (!piece) {
-      console.error('❌ Ошибка: нет фигуры в начальной клетке');
+
       if (currentPlayer === 2) {
         isBotThinkingRef.current = false;
         setBotThinking(false);
@@ -449,42 +425,30 @@ const BotGameScreen = ({ route, navigation }) => {
     });
     isAnimatingRef.current = true;
 
-    console.log('🎬 Анимация запущена');
   };
 
   // ← ← ← Ход бота (ИСПРАВЛЕННЫЙ)
   useEffect(() => {
-    console.log('🤖 Bot useEffect сработал:', { 
-      currentPlayer, 
-      gameOver, 
-      isBotThinking: isBotThinkingRef.current,
-      currentPiecePos,
-      botTurnTrigger: botTurnTriggerRef.current
-    });
+    
     
     // ← ← ← ПРОВЕРКИ: когда бот должен ходить
     if (currentPlayer !== 2) {
-      console.log('🤖 Пропуск: не ход бота (currentPlayer:', currentPlayer, ')');
       return;
     }
     
     if (gameOver) {
-      console.log('🤖 Пропуск: игра окончена');
       return;
     }
     
     if (isAnimatingRef.current) {
-      console.log('🤖 Пропуск: идёт анимация');
       return;
     }
     
     if (isBotThinkingRef.current) {
-      console.log('🤖 Пропуск: бот уже думает');
       return;
     }
 
     // ← ← ← ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ – бот ходит!
-    console.log('🤖 Бот начинает думать...');
     isBotThinkingRef.current = true;
     setBotThinking(true);
 
@@ -494,7 +458,6 @@ const BotGameScreen = ({ route, navigation }) => {
 
         // ← ← ← Если есть продолжение серии взятий
         if (currentPiecePos) {
-          console.log('🤖 Бот продолжает серию взятий с позиции:', currentPiecePos);
           const { row, col } = currentPiecePos;
           const captures = getCaptureMoves(board, row, col, 2);
           if (captures.length > 0) {

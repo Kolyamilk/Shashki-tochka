@@ -23,7 +23,6 @@ import { useSettings } from '../context/SettingsContext';
 const cleanupGame = async (gameId) => {
   if (!gameId) return;
   try {
-    console.log(`🧹 Очистка игры ${gameId}...`);
     await remove(ref(db, `games_checkers/${gameId}`));
     const invitationsRef = ref(db, 'invitations');
     const snapshot = await get(invitationsRef);
@@ -32,11 +31,9 @@ const cleanupGame = async (gameId) => {
       for (const [invId, inv] of Object.entries(invites)) {
         if (inv.gameId === gameId) {
           await remove(ref(db, `invitations/${invId}`));
-          console.log(`🗑️ Удалено приглашение ${invId}`);
         }
       }
     }
-    console.log(`✅ Игра ${gameId} удалена из базы`);
   } catch (error) {
     console.error('❌ Ошибка очистки игры:', error);
   }
@@ -111,7 +108,6 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
           newGifts: [...newGifts, giftId],
         });
         giftAdded = true;
-        console.log(`🎁 Добавлен подарок за ${winnerNewLevel} уровень`);
       } else {
         await update(ref(db, `users/${winnerId}`), { expHistory: winnerHistory });
       }
@@ -235,8 +231,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
   // ☆☆☆ Обновление заданий – пропускаем для сдавшегося ☆☆☆
   if (!(isSurrender && !isWin)) {
-    console.log('📋 Обновление прогресса заданий для игрока:', isWin ? 'победитель' : 'проигравший (не сдался)');
-
     // Обновление серии побед
     try {
       const userRef = ref(db, `users/${playerKey}`);
@@ -247,7 +241,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       if (isWin) {
         const newStreak = currentStreak + 1;
         await update(userRef, { winStreak: newStreak });
-        console.log(`🔥 Серия побед: ${newStreak}`);
 
         // Обновляем задания
         await updateProgress(TASK_TYPES.WIN_GAMES, 1);
@@ -260,7 +253,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
         // Проигрыш - сбрасываем серию
         if (currentStreak > 0) {
           await update(userRef, { winStreak: 0 });
-          console.log('💔 Серия побед сброшена');
         }
       }
     } catch (error) {
@@ -280,8 +272,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     if (myCaptured > 0) {
       await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
     }
-  } else {
-    console.log('⏭️ Пропускаем задания для проигравшего (сдался/ушёл)');
   }
 
   setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin, hasNewGift, playerSurrendered: isSurrender && !isWin });
@@ -299,7 +289,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
   };
 
   useEffect(() => {
-    console.log('🎮 OnlineGameScreen загружен с params:', route.params);
     currentGameIdRef.current = gameId;
   }, []);
 
@@ -317,7 +306,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     setAnimatingMove(null);
     isAnimatingRef.current = false;
     lastBoardRef.current = finalBoard;
-    console.log('✅ Анимация завершена, isAnimatingRef:', isAnimatingRef.current);
 
     if (furtherCaptures.length > 0 && wasCapture) {
       setCurrentPiecePos({ row: move.toRow, col: move.toCol });
@@ -377,7 +365,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       nextPlayer = opponentId;
     }
 
-    console.log('🎯 Вычислен следующий игрок:', nextPlayer);
     const currentCaptured = captured || { white: 0, black: 0 };
     const newCaptured = { ...currentCaptured };
     if (wasCapture) {
@@ -408,15 +395,44 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     });
     isAnimatingRef.current = true;
 
+    // Проверка окончания игры
     const opponentPlayer = myRole === 1 ? 2 : 1;
-    const opponentHasMoves = hasMoves(newBoard, opponentPlayer);
-    const currentPlayerHasMoves = hasMoves(newBoard, myRole);
-    if (!opponentHasMoves) {
-      const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
-      endGame('Вы выиграли!', playerKey, opponentId);
-    } else if (!currentPlayerHasMoves) {
-      const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
-      endGame('Вы проиграли!', opponentId, playerKey);
+    const isGiveaway = gameData?.gameType === 'giveaway';
+
+    if (isGiveaway) {
+      // В поддавках: побеждает тот, у кого не осталось фигур
+      let myPiecesCount = 0;
+      let opponentPiecesCount = 0;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const p = newBoard[r][c];
+          if (p) {
+            if (p.player === myRole) myPiecesCount++;
+            else opponentPiecesCount++;
+          }
+        }
+      }
+
+      if (myPiecesCount === 0) {
+        // Я избавился от всех фигур - я победил
+        const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+        endGame('Вы выиграли!', playerKey, opponentId);
+      } else if (opponentPiecesCount === 0) {
+        // Соперник избавился от всех фигур - он победил
+        const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+        endGame('Вы проиграли!', opponentId, playerKey);
+      }
+    } else {
+      // В обычных шашках: проигрывает тот, у кого нет ходов
+      const opponentHasMoves = hasMoves(newBoard, opponentPlayer);
+      const currentPlayerHasMoves = hasMoves(newBoard, myRole);
+      if (!opponentHasMoves) {
+        const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+        endGame('Вы выиграли!', playerKey, opponentId);
+      } else if (!currentPlayerHasMoves) {
+        const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+        endGame('Вы проиграли!', opponentId, playerKey);
+      }
     }
   };
 
@@ -463,38 +479,61 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       if (!data) {
         if (!isInitialized.current) return;
         if (!isGameEnding.current && !isCleanupDone.current) {
-          console.log('⚠️ Игра удалена');
           isCleanupDone.current = true;
         }
         return;
       }
       if (!isInitialized.current) isInitialized.current = true;
       if (data.status === 'finished' && !isGameEnding.current) {
-        console.log('🏁 Игра завершена на сервере');
         isGameEnding.current = true;
         const isWin = data.winner === playerKey;
         let expGained = 0;
         let oldExp = 0;
         let opponentLeft = false;
 
-        // Получаем текущий опыт игрока
-        const myStatsRef = ref(db, `users/${playerKey}/stats`);
-        const myStatsSnap = await get(myStatsRef);
-        const myStats = myStatsSnap.val() || { exp: 0 };
-        oldExp = myStats.exp || 0;
+        // Получаем опыт игрока ДО игры из истории опыта
+        const myUserRef = ref(db, `users/${playerKey}`);
+        const myUserSnap = await get(myUserRef);
+        const myUserData = myUserSnap.val() || {};
+        const expHistory = myUserData.expHistory || [];
 
-        if (data.surrendered) {
-          opponentLeft = true;
-          if (isWin) {
-            expGained = EXP_REWARDS.WIN_ONLINE;
+        // Последняя запись в истории - это текущая игра
+        if (expHistory.length > 0 && expHistory[0].timestamp > (Date.now() - 10000)) {
+          // Если последняя запись свежая (меньше 10 секунд), берем из нее данные
+          expGained = expHistory[0].expGained || 0;
+          const currentExp = myUserData.stats?.exp || 0;
+          oldExp = currentExp - expGained;
+        } else {
+          // Иначе вычисляем по стандартной логике
+          const myStatsRef = ref(db, `users/${playerKey}/stats`);
+          const myStatsSnap = await get(myStatsRef);
+          const myStats = myStatsSnap.val() || { exp: 0 };
+          const currentExp = myStats.exp || 0;
+
+          if (data.surrendered) {
+            opponentLeft = true;
+            if (isWin) {
+              expGained = EXP_REWARDS.WIN_ONLINE;
+              oldExp = currentExp - expGained;
+            } else {
+              expGained = 0;
+              oldExp = currentExp;
+            }
+          } else {
+            // Обычная победа/поражение
+            if (isWin) {
+              expGained = EXP_REWARDS.WIN_ONLINE;
+              oldExp = currentExp - expGained;
+            } else {
+              expGained = EXP_REWARDS.LOSE_ONLINE;
+              oldExp = currentExp - expGained;
+            }
           }
         }
 
         // Обновляем задания для обоих игроков (кроме сдавшегося)
         const isSurrendered = data.surrendered === playerKey;
         if (!isSurrendered) {
-          console.log('📋 Обновление прогресса заданий (из Firebase listener):', { isWin, isSurrendered });
-
           // Обновление серии побед
           try {
             const userRef = ref(db, `users/${playerKey}`);
@@ -505,19 +544,17 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
             if (isWin) {
               const newStreak = currentStreak + 1;
               await update(userRef, { winStreak: newStreak });
-              console.log(`🔥 Серия побед: ${newStreak}`);
 
               await updateProgress(TASK_TYPES.WIN_GAMES, 1);
               await updateProgress(TASK_TYPES.WIN_ONLINE, 1);
               await updateProgress(TASK_TYPES.WIN_STREAK, newStreak);
-              if (gameData?.gameType === 'giveaway') {
+              if (data.gameType === 'giveaway') {
                 await updateProgress(TASK_TYPES.WIN_GIVEAWAY, 1, 'giveaway');
               }
             } else {
               // Проигрыш - сбрасываем серию
               if (currentStreak > 0) {
                 await update(userRef, { winStreak: 0 });
-                console.log('💔 Серия побед сброшена');
               }
             }
           } catch (error) {
@@ -528,7 +565,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
           await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
           await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
           await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
-          if (gameData?.gameType === 'giveaway') {
+          if (data.gameType === 'giveaway') {
             await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
           }
 
@@ -537,8 +574,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
           if (myCaptured > 0) {
             await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
           }
-        } else {
-          console.log('⏭️ Пропускаем задания (игрок сдался)');
         }
 
         setVictoryData({ isWin, expGained, oldExp, opponentLeft });
@@ -559,7 +594,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       const wasMyLastMove = lastMoveWasMineRef.current;
 
       if (hasChanged && !isAnimatingRef.current && !wasMyLastMove && lastBoardRef.current) {
-        console.log('🎬 Анимация хода соперника');
         setAnimatingMove(null);
         let from = null, to = null, movedPiece = null;
         let capturedPositions = [];
@@ -636,7 +670,6 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
       // Если прошло больше 2 минут и сейчас мой ход
       if (timeSinceLastMove >= TWO_MINUTES && gameData.currentPlayer === playerKey) {
-        console.log('⏰ Таймаут бездействия - автоматическая сдача');
         const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
         if (opponentId) {
           endGame('Вы не сделали ход вовремя', opponentId, playerKey, true, true);

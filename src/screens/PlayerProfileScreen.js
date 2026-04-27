@@ -79,7 +79,6 @@ const PlayerProfileScreen = ({ route, navigation }) => {
   // Получение данных игрока и его статуса
   useEffect(() => {
     // Пересоздаём подписку при входе на экран
-    console.log('🔄 PlayerProfileScreen: пересоздаём подписку на приглашения');
     resetInviteFlags();
 
     const fetchPlayerData = async () => {
@@ -338,7 +337,6 @@ const PlayerProfileScreen = ({ route, navigation }) => {
       setSentInviteId(null);
 
       // Принудительно пересоздаём подписку на приглашения
-      console.log('🔄 Отменено приглашение, пересоздаём подписку');
       resetInviteFlags();
 
       Alert.alert('Приглашение отменено', 'Подписка на приглашения обновлена.');

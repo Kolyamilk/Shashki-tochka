@@ -30,7 +30,6 @@ const PlayersScreen = ({ navigation }) => {
   // ← Загружаем список всех пользователей (исключая текущего)
   useEffect(() => {
     // Пересоздаём подписку на приглашения при входе на экран
-    console.log('🔄 PlayersScreen: пересоздаём подписку на приглашения');
     resetInviteFlags();
 
     const fetchUsers = async () => {

@@ -85,7 +85,6 @@ const MenuScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       // Пересоздаём подписку на приглашения при возврате на главный экран
-      console.log('🔄 MenuScreen: пересоздаём подписку на приглашения');
       resetInviteFlags();
 
       if (!userData) fetchUserData();
