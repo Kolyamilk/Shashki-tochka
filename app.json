@@ -2,7 +2,7 @@
   "expo": {
     "name": "Шашки и точка",
     "slug": "ShashkiOnline",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,7 +16,7 @@
       "bundleIdentifier": "com.yourcompany.checkersonline"
     },
     "android": {
-      "versionCode": 16,
+      "versionCode": 17,
       "package": "com.anonymous.CheckersOnline",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
