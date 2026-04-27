@@ -1,7 +1,7 @@
 // src/screens/ProfileScreen.js
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
-import { ref, get, update } from 'firebase/database';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Modal, ScrollView, TextInput } from 'react-native';
+import { ref, get, update, push } from 'firebase/database';
 import { db } from '../firebase/config';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,9 @@ const ProfileScreen = ({ navigation }) => {
   const [levelInfoModalVisible, setLevelInfoModalVisible] = useState(false);
   const [expHistoryModalVisible, setExpHistoryModalVisible] = useState(false);
   const [expHistory, setExpHistory] = useState([]);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportText, setReportText] = useState('');
+  const [sendingReport, setSendingReport] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -88,6 +91,38 @@ const ProfileScreen = ({ navigation }) => {
       Alert.alert('Ошибка', 'Не удалось обновить аватар');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendReport = async () => {
+    if (!reportText.trim()) {
+      Alert.alert('Ошибка', 'Пожалуйста, опишите проблему');
+      return;
+    }
+
+    setSendingReport(true);
+    try {
+      const reportsRef = ref(db, 'statement_errors');
+      const newReportRef = push(reportsRef);
+
+      await update(newReportRef, {
+        userId: userId,
+        userName: userData?.name || 'Неизвестный',
+        userAvatar: userData?.avatar || '😀',
+        userLevel: getLevelFromExp(userData?.stats?.exp || 0).level,
+        message: reportText.trim(),
+        timestamp: Date.now(),
+        status: 'new',
+      });
+
+      setReportText('');
+      setReportModalVisible(false);
+      Alert.alert('Спасибо!', 'Ваше сообщение отправлено. Мы рассмотрим его в ближайшее время.');
+    } catch (error) {
+      console.error('Ошибка отправки отчета:', error);
+      Alert.alert('Ошибка', 'Не удалось отправить сообщение. Попробуйте позже.');
+    } finally {
+      setSendingReport(false);
     }
   };
 
@@ -187,6 +222,9 @@ const ProfileScreen = ({ navigation }) => {
       <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.backButton} onPress={goBack}>
           <Text style={styles.buttonText}>Назад</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.reportButton} onPress={() => setReportModalVisible(true)}>
+          <Text style={styles.reportButtonText}>🐛 Сообщить об ошибке</Text>
         </TouchableOpacity>
       </View>
 
@@ -513,6 +551,56 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Модальное окно сообщения об ошибке */}
+      <Modal
+        visible={reportModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setReportModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🐛 Сообщить об ошибке</Text>
+            <Text style={styles.reportHint}>
+              Опишите проблему, с которой вы столкнулись. Мы постараемся исправить её как можно скорее.
+            </Text>
+
+            <TextInput
+              style={styles.reportInput}
+              placeholder="Опишите проблему..."
+              placeholderTextColor="#888"
+              multiline
+              numberOfLines={8}
+              value={reportText}
+              onChangeText={setReportText}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.reportButtons}>
+              <TouchableOpacity
+                style={[styles.reportSendButton, sendingReport && styles.reportSendButtonDisabled]}
+                onPress={handleSendReport}
+                disabled={sendingReport}
+              >
+                <Text style={styles.reportSendButtonText}>
+                  {sendingReport ? 'Отправка...' : 'Отправить'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reportCancelButton}
+                onPress={() => {
+                  setReportModalVisible(false);
+                  setReportText('');
+                }}
+                disabled={sendingReport}
+              >
+                <Text style={styles.reportCancelButtonText}>Отмена</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -521,7 +609,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    justifyContent: 'space-between', // чтобы кнопки были внизу
+    justifyContent: 'space-between',
     padding: 20,
   },
   content: {
@@ -606,6 +694,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     borderRadius: 30,
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  reportButton: {
+    backgroundColor: '#9b59b6',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+    alignItems: 'center',
+  },
+  reportButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   closeBtn: {
     color: '#FF6B6B',
@@ -984,6 +1085,57 @@ const styles = StyleSheet.create({
   historyExp: {
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  // Стили для модального окна сообщения об ошибке
+  reportHint: {
+    fontSize: 13,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  reportInput: {
+    backgroundColor: '#1a2a3a',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: colors.textLight,
+    borderWidth: 1,
+    borderColor: '#4a5a6a',
+    minHeight: 120,
+    marginBottom: 20,
+  },
+  reportButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  reportSendButton: {
+    flex: 1,
+    backgroundColor: '#4ECDC4',
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  reportSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  reportSendButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a2a3a',
+  },
+  reportCancelButton: {
+    flex: 1,
+    backgroundColor: '#6c757d',
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  reportCancelButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });
 

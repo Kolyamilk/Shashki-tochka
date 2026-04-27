@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { ref, get, push, set, remove, onValue, off, update } from 'firebase/database';
 import { db } from '../firebase/config';
@@ -14,6 +16,7 @@ import { colors } from '../styles/globalStyles';
 import { useAuth } from '../context/AuthContext';
 import { sendPushNotification } from '../utils/notifications';
 import { useInvite } from '../context/InviteContext';
+import { getLevelFromExp } from '../utils/levelSystem';
 
 const PlayerProfileScreen = ({ route, navigation }) => {
   const { playerId } = route.params;
@@ -31,6 +34,10 @@ const PlayerProfileScreen = ({ route, navigation }) => {
     gameId: null,
   });
   const [hasPendingInvite, setHasPendingInvite] = useState(false);
+  const [giftModalVisible, setGiftModalVisible] = useState(false);
+  const [myTokens, setMyTokens] = useState(0);
+  const [giftAmount, setGiftAmount] = useState('');
+  const [sendingGift, setSendingGift] = useState(false);
 
   const gameCreatedRef = useRef(false);
   const subscriptionsRef = useRef({
@@ -95,6 +102,14 @@ const PlayerProfileScreen = ({ route, navigation }) => {
           const status = statusSnap.val();
           setIsOnline(status.online === true);
           setLastSeen(status.lastSeen);
+        }
+
+        // Загружаем количество жетонов текущего пользователя
+        const myUserRef = ref(db, `users/${userId}`);
+        const myUserSnap = await get(myUserRef);
+        if (myUserSnap.exists()) {
+          const myData = myUserSnap.val();
+          setMyTokens(myData.taskRefreshTokens || 0);
         }
 
         await checkSentInvite();
