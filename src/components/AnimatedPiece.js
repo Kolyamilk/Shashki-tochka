@@ -102,7 +102,7 @@ const AnimatedPiece = ({ from, to, piece, onFinish, myRole, cellSize, wasCapture
     };
   }, [deltaX, deltaY, wasCapture]);
 
-  // ← Контейнер с absolute позиционированием
+  // Контейнер с absolute позиционированием
   if (piece.king) {
     return (
       <View style={[styles.absoluteContainer, { left: fromX, top: fromY }]}>

@@ -53,10 +53,14 @@ const ProfileScreen = ({ navigation }) => {
         {
           text: 'Выйти',
           style: 'destructive',
-          onPress: () => {
-            logout();
-            // После выхода контекст обновится, и навигация автоматически переключится на Login (см. App.js)
-            // navigation.replace('Login'); // не нужно, так как logout обновляет userId и AppNavigator перестроится
+          onPress: async () => {
+            try {
+              await logout();
+              // После выхода контекст обновится, и навигация автоматически переключится на Login (см. App.js)
+            } catch (error) {
+              console.error('Ошибка при выходе:', error);
+              Alert.alert('Ошибка', 'Не удалось выйти из аккаунта');
+            }
           },
         },
       ]

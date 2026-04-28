@@ -192,3 +192,24 @@ export const checkGiveawayWinner = (board, player) => {
 
   return null; // Игра продолжается
 };
+
+// Проверка на ничью: остались только две дамки
+export const checkDrawByTwoKings = (board) => {
+  let totalPieces = 0;
+  let kingCount = 0;
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const piece = board[r][c];
+      if (piece) {
+        totalPieces++;
+        if (piece.king) {
+          kingCount++;
+        }
+      }
+    }
+  }
+
+  // Ничья если осталось ровно 2 фигуры и обе дамки
+  return totalPieces === 2 && kingCount === 2;
+};

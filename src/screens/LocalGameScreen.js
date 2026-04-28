@@ -14,6 +14,7 @@ import {
   hasMoves,
   checkGiveawayWinner,
   BOARD_SIZE,
+  checkDrawByTwoKings,
 } from '../utils/checkersLogic';
 import { colors } from '../styles/globalStyles';
 
@@ -76,6 +77,12 @@ const LocalGameScreen = ({ navigation }) => {
         endGame('Игрок 2 победил! (отдал все фигуры)');
       }
     } else {
+      // Проверка на ничью (две дамки)
+      if (checkDrawByTwoKings(board)) {
+        endGame('Ничья! (остались две дамки)');
+        return;
+      }
+
       if (!hasMoves(board, 1) && !hasMoves(board, 2)) {
         endGame('Ничья!');
       } else if (!hasMoves(board, 1)) {

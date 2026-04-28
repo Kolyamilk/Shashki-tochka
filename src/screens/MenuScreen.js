@@ -33,9 +33,18 @@ const MenuScreen = ({ navigation }) => {
     if (!userId) return;
     setCheckingConnection(true);
     try {
-      // Пробуем загрузить данные пользователя как тест подключения
+      // Пробуем загрузить данные пользователя как тест подключения с таймаутом
       const userRef = ref(db, `users/${userId}`);
-      const userSnapshot = await get(userRef);
+
+      // Создаем промис с таймаутом 5 секунд
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+
+      const userSnapshot = await Promise.race([
+        get(userRef),
+        timeoutPromise
+      ]);
 
       if (userSnapshot.exists()) {
         setIsConnected(true);
@@ -56,6 +65,13 @@ const MenuScreen = ({ navigation }) => {
   useEffect(() => {
     checkConnection();
   }, [checkConnection]);
+
+  // Закрываем модальное окно при успешном подключении
+  useEffect(() => {
+    if (isConnected === true && showConnectionModal) {
+      setShowConnectionModal(false);
+    }
+  }, [isConnected, showConnectionModal]);
 
   // Загружаем данные текущего пользователя
   const fetchUserData = useCallback(async () => {
@@ -131,7 +147,7 @@ const MenuScreen = ({ navigation }) => {
     }
   }, [isConnected]);
 
-  // Загружаем только при первом фокусе
+  // Загружаем при каждом фокусе
   useFocusEffect(
     useCallback(() => {
       // Пересоздаём подписку на приглашения при возврате на главный экран
@@ -140,9 +156,10 @@ const MenuScreen = ({ navigation }) => {
       // Загружаем данные только если подключены
       if (isConnected) {
         if (!userData && !loadingUserData) fetchUserData();
-        if (topPlayers.length === 0 && !loadingTopPlayers) fetchTopPlayers();
+        // Всегда обновляем топ игроков при возврате на экран
+        if (!loadingTopPlayers) fetchTopPlayers();
       }
-    }, [isConnected, userData, topPlayers.length, loadingUserData, loadingTopPlayers, fetchUserData, fetchTopPlayers, resetInviteFlags])
+    }, [isConnected, userData, loadingUserData, loadingTopPlayers, fetchUserData, fetchTopPlayers, resetInviteFlags])
   );
 
   // ← ← ← ИСПРАВЛЕННЫЙ useEffect для подсчета онлайн
@@ -194,7 +211,7 @@ const MenuScreen = ({ navigation }) => {
 
   // Обработчик для кнопки "Найти соперника"
   const handleFindOpponent = () => {
-    if (!isConnected) {
+    if (isConnected === false || isConnected === null) {
       setShowConnectionModal(true);
       return;
     }
@@ -203,7 +220,7 @@ const MenuScreen = ({ navigation }) => {
 
   // Обработчик для кнопки "Задачи"
   const handleDailyTasks = () => {
-    if (!isConnected) {
+    if (isConnected === false || isConnected === null) {
       setShowConnectionModal(true);
       return;
     }
@@ -212,7 +229,7 @@ const MenuScreen = ({ navigation }) => {
 
   // Обработчик для топ игроков
   const handleLeaderboard = () => {
-    if (!isConnected) {
+    if (isConnected === false || isConnected === null) {
       setShowConnectionModal(true);
       return;
     }
@@ -222,34 +239,36 @@ const MenuScreen = ({ navigation }) => {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Модальное окно ошибки соединения */}
-      <Modal visible={showConnectionModal} transparent animationType="fade" onRequestClose={() => setShowConnectionModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>⚠️ Ошибка соединения</Text>
-            <Text style={styles.modalText}>Для доступа к этой функции необходимо подключение к интернету</Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={async () => {
-                  setShowConnectionModal(false);
-                  await checkConnection();
-                }}
-                disabled={checkingConnection}
-              >
-                <Text style={styles.modalButtonText}>
-                  {checkingConnection ? 'Проверка...' : '🔄 Повторить'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setShowConnectionModal(false)}
-              >
-                <Text style={styles.modalButtonText}>Закрыть</Text>
-              </TouchableOpacity>
+      {showConnectionModal && (
+        <Modal visible={showConnectionModal} transparent animationType="fade" onRequestClose={() => setShowConnectionModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>⚠️ Ошибка соединения</Text>
+              <Text style={styles.modalText}>Для доступа к этой функции необходимо подключение к интернету</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={async () => {
+                    setShowConnectionModal(false);
+                    await checkConnection();
+                  }}
+                  disabled={checkingConnection}
+                >
+                  <Text style={styles.modalButtonText}>
+                    {checkingConnection ? 'Проверка...' : '🔄 Повторить'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowConnectionModal(false)}
+                >
+                  <Text style={styles.modalButtonText}>Закрыть</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Онлайн бейдж */}
       <TouchableOpacity
@@ -291,17 +310,9 @@ const MenuScreen = ({ navigation }) => {
         </View>
 
         {/* Кнопки меню */}
-        {isConnected === null ? (
-          // Показываем загрузку при проверке подключения
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.checkingText}>Проверка подключения...</Text>
-          </View>
-        ) : (
-          // Показываем кнопки меню всегда (офлайн и онлайн)
-          <View style={styles.centerContainer}>
+        <View style={styles.centerContainer}>
           {/* Кнопка ежедневных заданий */}
-          {getCompletedCount() === 3 && isConnected ? (
+          {getCompletedCount() === 3 && isConnected === true ? (
             <TouchableOpacity
               style={[
                 styles.button,
@@ -325,13 +336,13 @@ const MenuScreen = ({ navigation }) => {
               style={[
                 styles.button,
                 styles.tasksButton,
-                !isConnected && styles.disabledButton
+                (isConnected === false || isConnected === null) && styles.disabledButton
               ]}
               onPress={handleDailyTasks}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonText}>
-                {!isConnected ? '🔒 Задачи на сегодня' : `📋 Задачи на сегодня (${getCompletedCount()}/3)`}
+                {(isConnected === false || isConnected === null) ? '🔒 Задачи на сегодня' : `📋 Задачи на сегодня (${getCompletedCount()}/3)`}
               </Text>
             </TouchableOpacity>
           )}
@@ -340,13 +351,13 @@ const MenuScreen = ({ navigation }) => {
             style={[
               styles.button,
               styles.primaryButton,
-              !isConnected && styles.disabledButton
+              (isConnected === false || isConnected === null) && styles.disabledButton
             ]}
             onPress={handleFindOpponent}
             activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>
-              {!isConnected ? '🔒 Найти соперника' : '🎯 Найти соперника'}
+              {(isConnected === false || isConnected === null) ? '🔒 Найти соперника' : '🎯 Найти соперника'}
             </Text>
           </TouchableOpacity>
 
@@ -366,58 +377,55 @@ const MenuScreen = ({ navigation }) => {
             <Text style={styles.buttonText}>👥 Локальная игра</Text>
           </TouchableOpacity>
         </View>
-        )}
 
         {/* Топ-3 игроков */}
-        {(topPlayers.length > 0 || !isConnected) && (
-          <View style={[styles.topContainer, !isConnected && styles.blurredSection]}>
-            <Text style={styles.topTitle}>🏆 Топ-3 игроков</Text>
-            {isConnected && topPlayers.length > 0 ? (
-              <>
-                <View style={styles.topPlayersList}>
-                  <FlatList
-                    data={topPlayers}
-                    renderItem={renderTopPlayer}
-                    keyExtractor={(_, index) => index.toString()}
-                    scrollEnabled={false}
-                  />
-                </View>
-                <TouchableOpacity
-                  style={styles.showAllButton}
-                  onPress={handleLeaderboard}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={styles.topPlayersList}>
-                  {[1, 2, 3].map((index) => (
-                    <View key={index} style={styles.topPlayer}>
-                      <Text style={styles.topRank}>{index}</Text>
-                      <Text style={styles.topAvatar}>👤</Text>
-                      <Text style={styles.topName}>Игрок {index}</Text>
-                      <Text style={[styles.topLevel, { color: '#888' }]}>Ур. --</Text>
-                    </View>
-                  ))}
-                </View>
-                <TouchableOpacity
-                  style={styles.showAllButton}
-                  onPress={handleLeaderboard}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {!isConnected && (
-              <View style={styles.offlineOverlay}>
-                <Text style={styles.offlineOverlayText}>🔒 Требуется интернет</Text>
+        <View style={[styles.topContainer, isConnected === false && styles.blurredSection]}>
+          <Text style={styles.topTitle}>🏆 Топ-3 игроков</Text>
+          {isConnected === true && topPlayers.length > 0 ? (
+            <>
+              <View style={styles.topPlayersList}>
+                <FlatList
+                  data={topPlayers}
+                  renderItem={renderTopPlayer}
+                  keyExtractor={(_, index) => index.toString()}
+                  scrollEnabled={false}
+                />
               </View>
-            )}
-          </View>
-        )}
+              <TouchableOpacity
+                style={styles.showAllButton}
+                onPress={handleLeaderboard}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.topPlayersList}>
+                {[1, 2, 3].map((index) => (
+                  <View key={index} style={styles.topPlayer}>
+                    <Text style={styles.topRank}>{index}</Text>
+                    <Text style={styles.topAvatar}>👤</Text>
+                    <Text style={styles.topName}>Игрок {index}</Text>
+                    <Text style={[styles.topLevel, { color: '#888' }]}>Ур. --</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.showAllButton}
+                onPress={handleLeaderboard}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          {isConnected === false && (
+            <View style={styles.offlineOverlay}>
+              <Text style={styles.offlineOverlayText}>🔒 Требуется интернет</Text>
+            </View>
+          )}
+        </View>
 
         {/* Нижняя панель */}
         <View style={styles.bottomPanel}>
@@ -432,17 +440,14 @@ const MenuScreen = ({ navigation }) => {
                   <Text style={styles.avatar}>{userData.avatar}</Text>
                   {hasNewGifts && (
                     <View style={styles.giftBadge}>
-                      <Text style={styles.giftBadgeEmoji}>{latestGiftEmoji}</Text>
-                      <View style={styles.giftBadgePlus}>
-                        <Text style={styles.giftBadgePlusText}>+</Text>
-                      </View>
+                      <Text style={styles.giftBadgeEmoji}>🎁</Text>
                     </View>
                   )}
                 </View>
                 <View style={styles.userInfo}>
                   <View style={styles.userNameRow}>
                     <Text style={styles.userName} numberOfLines={1}>{userData.name}</Text>
-                    {isConnected && (
+                    {isConnected === true && (
                       <View style={styles.connectionIndicator} />
                     )}
                   </View>
@@ -726,6 +731,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    backgroundColor: '#2c3e50',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   topTitle: {
     fontSize: 18,
@@ -831,19 +840,19 @@ const styles = StyleSheet.create({
   },
   giftBadge: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    flexDirection: 'row',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF4444',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFD700',
-    borderRadius: 12,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
     borderWidth: 2,
     borderColor: '#1a2a3a',
   },
   giftBadgeEmoji: {
-    fontSize: 14,
+    fontSize: 12,
   },
   giftBadgePlus: {
     marginLeft: 2,

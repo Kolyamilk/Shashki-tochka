@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { ref, get } from 'firebase/database';
 import { db } from '../firebase/config';
 
-const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation, hasNewGift = false, playerSurrendered = false }) => {
+const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation, hasNewGift = false, playerSurrendered = false, isDraw = false }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -154,16 +154,33 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
         >
           {/* Заголовок */}
           <Text style={styles.title}>
-            {playerSurrendered ? '🏳️ Вы решили сдаться' : (opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '😔 Вы проиграли'))}
+            {isDraw ? '🤝 Ничья!' : (playerSurrendered ? '🏳️ Вы решили сдаться' : (opponentLeft ? '🚪 Противник покинул игру' : (isWin ? '🎉 Победа!' : '😔 Вы проиграли')))}
           </Text>
 
           {/* Полученный опыт */}
-          <View style={styles.expContainer}>
-            <Text style={styles.expLabel}>Получено опыта</Text>
-            <Text style={styles.expValue}>+{expGained}</Text>
-          </View>
+          {!isDraw && !playerSurrendered && (
+            <View style={styles.expContainer}>
+              <Text style={styles.expLabel}>Получено опыта</Text>
+              <Text style={styles.expValue}>+{expGained}</Text>
+            </View>
+          )}
+
+          {isDraw && (
+            <View style={styles.drawContainer}>
+              <Text style={styles.drawText}>На доске остались только две дамки</Text>
+              <Text style={styles.drawSubtext}>Опыт не начисляется</Text>
+            </View>
+          )}
+
+          {playerSurrendered && (
+            <View style={styles.drawContainer}>
+              <Text style={styles.drawText}>Вы добровольно сдались</Text>
+              <Text style={styles.drawSubtext}>Опыт не начисляется</Text>
+            </View>
+          )}
 
           {/* Прогресс-бар */}
+          {!isDraw && !playerSurrendered && (
           <View style={styles.levelSection}>
             <View style={styles.levelHeader}>
               <Text style={styles.levelText}>
@@ -191,6 +208,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
               Всего опыта: {currentExp + expGained}
             </Text>
           </View>
+          )}
 
           {/* Анимация повышения уровня */}
           {showLevelUp && (
@@ -408,6 +426,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a2a3a',
+  },
+  drawContainer: {
+    backgroundColor: 'rgba(255, 193, 7, 0.15)',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#FFC107',
+  },
+  drawText: {
+    fontSize: 16,
+    color: colors.textLight,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  drawSubtext: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
   },
 });
 

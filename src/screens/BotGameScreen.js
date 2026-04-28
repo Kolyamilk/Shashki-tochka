@@ -1,6 +1,6 @@
 // src/screens/BotGameScreen.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler, AppState } from 'react-native';
 import { getLevelColor } from '../utils/levelSystem';
 import { useFocusEffect } from '@react-navigation/native';
 import { ref, set, remove, update } from 'firebase/database';
@@ -17,6 +17,7 @@ import {
   hasMoves,
   checkGiveawayWinner,
   BOARD_SIZE,
+  checkDrawByTwoKings,
 } from '../utils/checkersLogic';
 import { getBestMove } from '../utils/botLogic';
 import { colors } from '../styles/globalStyles';
@@ -48,6 +49,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const [pendingMove, setPendingMove] = useState(null);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
   const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
+  const [timeRemaining, setTimeRemaining] = useState(60); // 1 минута в секундах
   const [myLevel, setMyLevel] = useState(1);
   const [myName, setMyName] = useState('Вы');
   const [myAvatar, setMyAvatar] = useState('😀');
@@ -60,6 +62,9 @@ const BotGameScreen = ({ route, navigation }) => {
   const gameIdRef = useRef(null);
   const botTurnTriggerRef = useRef(0);
   const lastMoveTimeRef = useRef(Date.now());
+  const appStateRef = useRef(AppState.currentState);
+  const backgroundTimeRef = useRef(null);
+  const hasPlayerMovedRef = useRef(false); // Отслеживаем, сделал ли игрок хотя бы один ход
 
   // Подсчёт съеденных шашек
   const initialPiecesCount = 12;
@@ -332,6 +337,12 @@ const BotGameScreen = ({ route, navigation }) => {
         endGame('Компьютер победил! (отдал все фигуры)', 2);
       }
     } else {
+      // Проверка на ничью (две дамки)
+      if (checkDrawByTwoKings(board)) {
+        endGame('Ничья! (остались две дамки)', null);
+        return;
+      }
+
       // Обычный режим: побеждает тот, кто съел все фигуры противника
       if (!hasMoves(board, 1) && !hasMoves(board, 2)) {
         endGame('Ничья!', null);
@@ -342,6 +353,157 @@ const BotGameScreen = ({ route, navigation }) => {
       }
     }
   }, [board, gameOver, userId, difficulty, navigation, gameType]);
+
+  // Таймер хода игрока - проверяем каждую секунду
+  useEffect(() => {
+    if (gameOver || currentPlayer !== 1) return;
+
+    const checkInactivity = () => {
+      if (gameOver) return;
+
+      const now = Date.now();
+      const timeSinceLastMove = now - lastMoveTimeRef.current;
+      const ONE_MINUTE = 60 * 1000;
+
+      // Обновляем оставшееся время
+      const remaining = Math.max(0, Math.floor((ONE_MINUTE - timeSinceLastMove) / 1000));
+      setTimeRemaining(remaining);
+
+      // Если прошло больше 1 минуты и сейчас ход игрока
+      if (timeSinceLastMove >= ONE_MINUTE && currentPlayer === 1) {
+        // Игрок проиграл по таймауту - вызываем основную функцию endGame
+        setGameOver(true);
+
+        Alert.alert(
+          'Время вышло',
+          'Вы не сделали ход в течение 1 минуты и автоматически проиграли.',
+          [{ text: 'OK' }]
+        );
+
+        // Начисляем задания за сыгранную игру (проигрыш) ТОЛЬКО если игрок сделал хотя бы один ход
+        (async () => {
+          if (userId && hasPlayerMovedRef.current) {
+            try {
+              // Обновление серии побед
+              const userRef = ref(db, `users/${userId}`);
+              const userSnap = await get(userRef);
+              const userData = userSnap.val() || {};
+              const currentStreak = userData.winStreak || 0;
+
+              // При проигрыше сбрасываем серию
+              if (currentStreak > 0) {
+                await update(userRef, { winStreak: 0 });
+                await updateProgress(TASK_TYPES.WIN_STREAK, 0);
+              }
+
+              // Засчитываем сыгранную игру
+              await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+              if (isFakeOpponent) {
+                await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
+              }
+              if (gameType === 'giveaway') {
+                await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, gameType);
+              }
+
+              // Подсчёт съеденных шашек
+              const initialPiecesCount = 12;
+              const player2Pieces = board.flat().filter(p => p && p.player === 2).length;
+              const capturedByPlayer = initialPiecesCount - player2Pieces;
+              if (capturedByPlayer > 0) {
+                await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
+              }
+            } catch (error) {
+              console.error('Ошибка обновления заданий при таймауте:', error);
+            }
+          }
+        })();
+
+        setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
+        setVictoryModalVisible(true);
+      }
+    };
+
+    const interval = setInterval(checkInactivity, 1000);
+
+    return () => clearInterval(interval);
+  }, [gameOver, currentPlayer]);
+
+  // Отслеживание состояния приложения (сворачивание/разворачивание)
+  useEffect(() => {
+    if (gameOver) return;
+
+    const handleAppStateChange = (nextAppState) => {
+      if (appStateRef.current.match(/active/) && nextAppState.match(/inactive|background/)) {
+        // Приложение сворачивается - запоминаем время
+        backgroundTimeRef.current = Date.now();
+      } else if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+        // Приложение разворачивается - проверяем таймер
+        if (backgroundTimeRef.current && currentPlayer === 1) {
+          const timeSinceLastMove = Date.now() - lastMoveTimeRef.current;
+          const ONE_MINUTE = 60 * 1000;
+
+          // Если время вышло пока приложение было свернуто
+          if (timeSinceLastMove >= ONE_MINUTE) {
+            setGameOver(true);
+            Alert.alert(
+              'Время вышло',
+              'Вы не сделали ход в течение 1 минуты и автоматически проиграли.',
+              [{ text: 'OK' }]
+            );
+
+            // Начисляем задания за сыгранную игру (проигрыш) ТОЛЬКО если игрок сделал хотя бы один ход
+            (async () => {
+              if (userId && hasPlayerMovedRef.current) {
+                try {
+                  // Обновление серии побед
+                  const userRef = ref(db, `users/${userId}`);
+                  const userSnap = await get(userRef);
+                  const userData = userSnap.val() || {};
+                  const currentStreak = userData.winStreak || 0;
+
+                  // При проигрыше сбрасываем серию
+                  if (currentStreak > 0) {
+                    await update(userRef, { winStreak: 0 });
+                    await updateProgress(TASK_TYPES.WIN_STREAK, 0);
+                  }
+
+                  // Засчитываем сыгранную игру
+                  await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+                  if (isFakeOpponent) {
+                    await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
+                  }
+                  if (gameType === 'giveaway') {
+                    await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, gameType);
+                  }
+
+                  // Подсчёт съеденных шашек
+                  const initialPiecesCount = 12;
+                  const player2Pieces = board.flat().filter(p => p && p.player === 2).length;
+                  const capturedByPlayer = initialPiecesCount - player2Pieces;
+                  if (capturedByPlayer > 0) {
+                    await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
+                  }
+                } catch (error) {
+                  console.error('Ошибка обновления заданий при таймауте:', error);
+                }
+              }
+            })();
+
+            setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
+            setVictoryModalVisible(true);
+          }
+        }
+        backgroundTimeRef.current = null;
+      }
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [gameOver, currentPlayer]);
 
   const onAnimationFinish = () => {
     if (!pendingMove) return;
@@ -373,9 +535,15 @@ const BotGameScreen = ({ route, navigation }) => {
     } else {
       // ← ← ← НЕТ дальнейших взятий – переключаем игрока
       const nextPlayer = currentPlayer === 1 ? 2 : 1;
-      
+
       setCurrentPlayer(nextPlayer);
-      
+
+      // Сбрасываем таймер при смене игрока
+      if (nextPlayer === 1) {
+        lastMoveTimeRef.current = Date.now();
+        setTimeRemaining(60);
+      }
+
       // ← ← ← КРИТИЧНО: Очищаем ВСЁ при смене игрока!
       setCurrentPiecePos(null);
       setSelectedCell(null);
@@ -397,8 +565,14 @@ const BotGameScreen = ({ route, navigation }) => {
 
   const applyMove = (move) => {
 
-    // Обновляем время последнего хода
+    // Обновляем время последнего хода и сбрасываем таймер
     lastMoveTimeRef.current = Date.now();
+    setTimeRemaining(60);
+
+    // Отмечаем, что игрок сделал ход (если это ход игрока)
+    if (currentPlayer === 1) {
+      hasPlayerMovedRef.current = true;
+    }
 
     setSelectedCell(null);
     setValidMoves([]);
@@ -525,10 +699,10 @@ const BotGameScreen = ({ route, navigation }) => {
     const checkInactivity = () => {
       const now = Date.now();
       const timeSinceLastMove = now - lastMoveTimeRef.current;
-      const TWO_MINUTES = 2 * 60 * 1000;
+      const ONE_MINUTE = 60 * 1000;
 
       // Если прошло больше 2 минут и сейчас ход игрока
-      if (timeSinceLastMove >= TWO_MINUTES && currentPlayer === 1) {
+      if (timeSinceLastMove >= ONE_MINUTE && currentPlayer === 1) {
         endGame('Вы не сделали ход вовремя', 2, true);
       }
     };
@@ -700,6 +874,15 @@ const BotGameScreen = ({ route, navigation }) => {
         )}
       </View>
 
+      {/* Таймер отдельно над панелью игрока */}
+      {isMyTurn && timeRemaining <= 30 && (
+        <View style={[styles.timerContainer, timeRemaining < 30 && styles.timerContainerWarning]}>
+          <Text style={styles.timerText}>
+            ⏱️ {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </Text>
+        </View>
+      )}
+
       {/* Кнопка сдаться */}
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
@@ -861,6 +1044,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  timerContainer: {
+    position: 'absolute',
+    bottom: 140,
+    backgroundColor: '#FFC107',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
+  timerContainerWarning: {
+    backgroundColor: '#FF6B6B',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  timerText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
   giveUpButton: {
     position: 'absolute',
     bottom: 30,

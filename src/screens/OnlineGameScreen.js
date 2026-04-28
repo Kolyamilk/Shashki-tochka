@@ -1,8 +1,8 @@
 // src/screens/OnlineGameScreen.js
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, BackHandler, AppState, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { ref, onValue, update, remove, get } from 'firebase/database';
+import { ref, onValue, update, remove, get, runTransaction } from 'firebase/database';
 import { db } from '../firebase/config';
 import Board from '../components/Board';
 import VictoryModal from '../components/VictoryModal';
@@ -14,7 +14,8 @@ import {
   getCaptureMoves,
   hasAnyCapture,
   hasMoves,
-  BOARD_SIZE
+  BOARD_SIZE,
+  checkDrawByTwoKings
 } from '../utils/checkersLogic';
 import { EXP_REWARDS, getLevelFromExp, getLevelColor } from '../utils/levelSystem';
 import { colors } from '../styles/globalStyles';
@@ -196,7 +197,8 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [myAvatar, setMyAvatar] = useState('');
   const [myLevel, setMyLevel] = useState(1);
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
-  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false, playerSurrendered: false });
+  const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false, playerSurrendered: false, isDraw: false });
+  const [timeRemaining, setTimeRemaining] = useState(60); // 1 минута в секундах
 
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
@@ -212,8 +214,10 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const lastMoveWasMineRef = useRef(false);
   const inactivityTimerRef = useRef(null);
   const lastMoveTimeRef = useRef(Date.now());
+  const appStateRef = useRef(AppState.currentState);
+  const backgroundTimeRef = useRef(null);
 
-const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrender = false, isTimeout = false) => {
+const endGame = useCallback(async (resultMessage, winnerId = null, loserId = null, isSurrender = false, isTimeout = false) => {
   if (isGameEnding.current) return;
   isGameEnding.current = true;
 
@@ -232,7 +236,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
   if (isTimeout && !isWin) {
     Alert.alert(
       'Время вышло',
-      'Вы не сделали ход в течение 2 минут и автоматически проиграли.',
+      'Вы не сделали ход в течение 1 минуты и автоматически проиграли.',
       [{ text: 'OK' }]
     );
   }
@@ -265,8 +269,9 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     }
   }
 
-  // ☆☆☆ Обновление заданий – пропускаем для сдавшегося ☆☆☆
-  if (!(isSurrender && !isWin)) {
+  // ☆☆☆ Обновление заданий ☆☆☆
+  // Пропускаем только если игрок сам сдался (не таймаут)
+  if (!(isSurrender && !isWin && !isTimeout)) {
     // Обновление серии побед
     try {
       const userRef = ref(db, `users/${playerKey}`);
@@ -296,7 +301,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       console.error('Ошибка обновления серии побед:', error);
     }
 
-    // Сыгранная игра (независимо от результата, но только если не сдался)
+    // Сыгранная игра (независимо от результата)
     await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
     await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
     // Засчитываем "Сыграть с другом" только если игра через приглашение
@@ -307,16 +312,16 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
     }
 
-    // Подсчёт съеденных шашек (только если не сдался)
+    // Подсчёт съеденных шашек
     const myCaptured = myRole === 1 ? captured.black : captured.white;
     if (myCaptured > 0) {
       await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
     }
   }
 
-  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin, hasNewGift, playerSurrendered: isSurrender && !isWin });
+  setVictoryData({ isWin, expGained, oldExp, opponentLeft: isSurrender && !isWin, hasNewGift, playerSurrendered: isSurrender && !isWin, isDraw: false });
   setVictoryModalVisible(true);
-};
+}, [gameId, playerKey, myRole, gameData, captured, updateProgress, TASK_TYPES]);
 
   const handleVictoryClose = async () => {
     setVictoryModalVisible(false);
@@ -335,7 +340,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
   const onAnimationFinish = () => {
     if (!pendingMove) return;
     const finalBoard = pendingBoard.map(r => [...r]);
-    const { move, wasCapture, furtherCaptures, willBeKing } = pendingMove;
+    const { move, wasCapture, furtherCaptures, willBeKing, nextPlayer } = pendingMove;
 
     if (willBeKing) {
       const piece = finalBoard[move.toRow][move.toCol];
@@ -350,7 +355,12 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
     if (furtherCaptures.length > 0 && wasCapture) {
       setCurrentPiecePos({ row: move.toRow, col: move.toCol });
       setSelectedCell(null);
-      setValidMoves(furtherCaptures);
+      // Показываем validMoves только если это ход текущего игрока
+      if (nextPlayer === playerKey) {
+        setValidMoves(furtherCaptures);
+      } else {
+        setValidMoves([]);
+      }
     } else {
       setCurrentPiecePos(null);
       setSelectedCell(null);
@@ -373,6 +383,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
     // Обновляем время последнего хода
     lastMoveTimeRef.current = Date.now();
+    setTimeRemaining(60); // Сбрасываем таймер на 1 минуту
 
     setSelectedCell(null);
     setValidMoves([]);
@@ -416,6 +427,7 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       board: newBoard,
       currentPlayer: nextPlayer,
       captured: newCaptured,
+      lastMoveTime: Date.now(),
     };
 
     lastMoveWasMineRef.current = true;
@@ -434,6 +446,61 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       wasCapture: wasCapture,
     });
     isAnimatingRef.current = true;
+
+    // Проверка на ничью (две дамки)
+    if (checkDrawByTwoKings(newBoard)) {
+      Alert.alert('Ничья', 'На доске остались только две дамки. Игра завершена вничью.', [{ text: 'OK' }]);
+
+      // Обрабатываем ничью асинхронно
+      (async () => {
+        try {
+          await update(ref(db, `games_checkers/${gameId}`), {
+            status: 'finished',
+            winner: null,
+            draw: true,
+            finishedAt: Date.now(),
+          });
+        } catch (err) {
+          console.error('Ошибка обновления статуса игры:', err);
+        }
+
+        // Начисляем задания при ничье (сыгранная игра)
+        try {
+          const userRef = ref(db, `users/${playerKey}`);
+          const userSnap = await get(userRef);
+          const userData = userSnap.val() || {};
+          const currentStreak = userData.winStreak || 0;
+
+          // При ничье сбрасываем серию побед
+          if (currentStreak > 0) {
+            await update(userRef, { winStreak: 0 });
+            await updateProgress(TASK_TYPES.WIN_STREAK, 0);
+          }
+
+          // Засчитываем сыгранную игру
+          await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+          await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
+          if (gameId.startsWith('invite_') || gameId.startsWith('private_')) {
+            await updateProgress(TASK_TYPES.PLAY_WITH_FRIEND, 1);
+          }
+          if (gameData?.gameType === 'giveaway') {
+            await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, 'giveaway');
+          }
+
+          // Подсчёт съеденных шашек
+          const myCaptured = myRole === 1 ? captured.black : captured.white;
+          if (myCaptured > 0) {
+            await updateProgress(TASK_TYPES.CAPTURE_PIECES, myCaptured);
+          }
+        } catch (error) {
+          console.error('Ошибка обновления заданий при ничье:', error);
+        }
+      })();
+
+      setVictoryData({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false, playerSurrendered: false, isDraw: true });
+      setVictoryModalVisible(true);
+      return;
+    }
 
     // Проверка окончания игры
     const opponentPlayer = myRole === 1 ? 2 : 1;
@@ -627,6 +694,37 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       if (!data.board) return;
       setGameData(data);
       setCaptured(data.captured || { white: 0, black: 0 });
+
+      // Обновляем время последнего хода из Firebase
+      // Если lastMoveTime нет в базе, устанавливаем его сейчас (игра только началась)
+      if (data.lastMoveTime) {
+        lastMoveTimeRef.current = data.lastMoveTime;
+        console.log('Загружен lastMoveTime из Firebase:', new Date(data.lastMoveTime).toLocaleTimeString(), 'Прошло секунд:', Math.floor((Date.now() - data.lastMoveTime) / 1000));
+      } else {
+        // Игра только началась, устанавливаем lastMoveTime в Firebase
+        // Используем транзакцию, чтобы только один игрок установил время
+        const now = Date.now();
+        lastMoveTimeRef.current = now;
+        console.log('Установлен новый lastMoveTime:', new Date(now).toLocaleTimeString());
+
+        // Используем транзакцию для атомарной установки
+        const gameRef = ref(db, 'games_checkers/' + gameId);
+        runTransaction(gameRef, (currentData) => {
+          if (!currentData) return currentData;
+          if (currentData.lastMoveTime) {
+            // Другой игрок уже установил время
+            return undefined; // Отменяем транзакцию
+          }
+          return { ...currentData, lastMoveTime: now };
+        }).then((result) => {
+          if (result.committed) {
+            console.log('lastMoveTime успешно установлен в Firebase');
+          } else {
+            console.log('lastMoveTime уже был установлен другим игроком');
+          }
+        }).catch(err => console.error('Ошибка установки lastMoveTime:', err));
+      }
+
       const newBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
       for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
@@ -690,19 +788,17 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
       lastBoardRef.current = newBoard;
       if (!wasMyLastMove) lastMoveWasMineRef.current = false;
       setLoading(false);
+
       if (data.currentPlayer !== playerKey) {
         setSelectedCell(null);
         setValidMoves([]);
         setCurrentPiecePos(null);
-      } else {
-        // Мой ход - обновляем время последнего хода
-        lastMoveTimeRef.current = Date.now();
       }
     });
     return () => unsubscribe();
   }, [gameId, playerKey, myRole]);
 
-  // Таймер бездействия - проверяем каждые 10 секунд
+  // Таймер бездействия - проверяем каждую секунду
   useEffect(() => {
     if (isGameEnding.current || !gameData) return;
 
@@ -711,22 +807,73 @@ const endGame = async (resultMessage, winnerId = null, loserId = null, isSurrend
 
       const now = Date.now();
       const timeSinceLastMove = now - lastMoveTimeRef.current;
-      const TWO_MINUTES = 2 * 60 * 1000;
+      const ONE_MINUTE = 60 * 1000;
 
-      // Если прошло больше 2 минут и сейчас мой ход
-      if (timeSinceLastMove >= TWO_MINUTES && gameData.currentPlayer === playerKey) {
+      // Обновляем оставшееся время
+      const remaining = Math.max(0, Math.floor((ONE_MINUTE - timeSinceLastMove) / 1000));
+      setTimeRemaining(remaining);
+
+      // Логирование для отладки (можно удалить позже)
+      if (gameData.currentPlayer === playerKey && remaining <= 30) {
+        console.log('Таймер:', remaining, 'сек, lastMoveTime:', new Date(lastMoveTimeRef.current).toLocaleTimeString());
+      }
+
+      // Если прошла 1 минута - завершаем игру (проверяем на обеих сторонах)
+      if (timeSinceLastMove >= ONE_MINUTE) {
         const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
-        if (opponentId) {
+        if (!opponentId) return;
+
+        // Если это мой ход - я проиграл
+        if (gameData.currentPlayer === playerKey) {
           endGame('Вы не сделали ход вовремя', opponentId, playerKey, true, true);
+        }
+        // Если это ход противника - он проиграл, я выиграл
+        else if (gameData.currentPlayer === opponentId) {
+          endGame('Противник не сделал ход вовремя', playerKey, opponentId, true, true);
         }
       }
     };
 
-    // Проверяем каждые 10 секунд
-    const interval = setInterval(checkInactivity, 10000);
+    // Проверяем каждую секунду для точного отображения таймера
+    const interval = setInterval(checkInactivity, 1000);
 
     return () => clearInterval(interval);
-  }, [gameData, playerKey]);
+  }, [gameData, playerKey, endGame]);
+
+  // Отслеживание состояния приложения (сворачивание/разворачивание)
+  useEffect(() => {
+    if (isGameEnding.current || !gameData) return;
+
+    const handleAppStateChange = (nextAppState) => {
+      if (appStateRef.current.match(/active/) && nextAppState.match(/inactive|background/)) {
+        // Приложение сворачивается - запоминаем время
+        backgroundTimeRef.current = Date.now();
+      } else if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+        // Приложение разворачивается - проверяем таймер
+        if (backgroundTimeRef.current && gameData.currentPlayer === playerKey) {
+          const timeInBackground = Date.now() - backgroundTimeRef.current;
+          const timeSinceLastMove = Date.now() - lastMoveTimeRef.current;
+          const ONE_MINUTE = 60 * 1000;
+
+          // Если время вышло пока приложение было свернуто
+          if (timeSinceLastMove >= ONE_MINUTE) {
+            const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
+            if (opponentId) {
+              endGame('Вы не сделали ход вовремя', opponentId, playerKey, true, true);
+            }
+          }
+        }
+        backgroundTimeRef.current = null;
+      }
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [gameData, playerKey, endGame]);
 
   useFocusEffect(
     useCallback(() => {
@@ -855,6 +1002,15 @@ const handleGiveUp = async () => {
         )}
       </View>
 
+      {/* Таймер противника над его панелью */}
+      {!isMyTurn && timeRemaining <= 30 && (
+        <View style={[styles.timerContainerOpponent, timeRemaining <= 10 && styles.timerContainerWarning]}>
+          <Text style={styles.timerText}>
+            ⏱️ {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.capturedRow}>
         {Array.from({ length: opponentCaptured }).map((_, index) => (
           <View key={`opponent-${index}`} style={[styles.capturedPiece, { backgroundColor: myPieceColor, borderColor: myPieceColor }]} />
@@ -893,6 +1049,15 @@ const handleGiveUp = async () => {
         )}
       </View>
 
+      {/* Таймер отдельно над панелью игрока */}
+      {isMyTurn && timeRemaining <= 30 && (
+        <View style={[styles.timerContainer, timeRemaining <= 10 && styles.timerContainerWarning]}>
+          <Text style={styles.timerText}>
+            ⏱️ {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
@@ -906,11 +1071,14 @@ const handleGiveUp = async () => {
         opponentLeft={victoryData.opponentLeft || false}
         hasNewGift={victoryData.hasNewGift || false}
         playerSurrendered={victoryData.playerSurrendered || false}
+        isDraw={victoryData.isDraw || false}
         navigation={navigation}
       />
     </View>
   );
 };
+
+const { height: screenHeight } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1a2a3a', alignItems: 'center', justifyContent: 'center' },
@@ -930,6 +1098,40 @@ const styles = StyleSheet.create({
   levelBadge: { fontSize: 11, fontWeight: 'bold', marginTop: 2 },
   turnBadge: { backgroundColor: '#4ECDC4', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 15, marginLeft: 8 },
   turnBadgeText: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
+  timerContainer: {
+    position: 'absolute',
+    bottom: screenHeight * 0.18,
+    backgroundColor: '#FFC107',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
+  timerContainerOpponent: {
+    position: 'absolute',
+    top: screenHeight * 0.18,
+    backgroundColor: '#FFC107',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
+  timerContainerWarning: {
+    backgroundColor: '#FF6B6B',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  timerText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
   giveUpButton: { position: 'absolute', bottom: 30, backgroundColor: '#FF6B6B', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5, zIndex: 10 },
   giveUpText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   status: { color: colors.textLight, fontSize: 18 },

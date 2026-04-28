@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -29,9 +30,15 @@ const ProfileGiftScreen = ({ navigation }) => {
   const [newGiftIds, setNewGiftIds] = useState([]);
   const [tokenCount, setTokenCount] = useState(0);
 
+  // Помечаем подарки как просмотренные при каждом открытии экрана
+  useFocusEffect(
+    useCallback(() => {
+      markGiftsAsViewed();
+    }, [userId])
+  );
+
   useEffect(() => {
     loadUserGifts();
-    markGiftsAsViewed();
     loadTokens();
   }, [userId]);
 
