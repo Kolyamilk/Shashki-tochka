@@ -10,18 +10,8 @@ import { colors } from '../styles/globalStyles';
 import { EXP_REWARDS, getLevelFromExp } from '../utils/levelSystem';
 
 const gameTypes = [
-  {
-    id: 'russian',
-    name: 'Русские шашки',
-    emoji: '♟️',
-    description: 'Классические правила: побеждает тот, кто съест все шашки соперника или лишит его ходов.',
-  },
-  {
-    id: 'giveaway',
-    name: 'Поддавки',
-    emoji: '🎯',
-    description: 'Цель – отдать все свои шашки первым. Побеждает тот, кто первым остался без фигур.',
-  },
+  { id: 'russian', name: 'Русские шашки', emoji: '♟️' },
+  { id: 'giveaway', name: 'Поддавки', emoji: '🎯' },
 ];
 
 const OnlineGameSetupScreen = ({ navigation }) => {
@@ -68,50 +58,43 @@ const OnlineGameSetupScreen = ({ navigation }) => {
           <Text style={styles.levelBadgeText}>Ваш уровень: {currentLevel}</Text>
         </View>
 
-        {/* Награды за игру */}
+        {/* Награды за игру (стилизовано как блок информации) */}
         <View style={styles.rewardBox}>
-          <Text style={styles.rewardTitle}>💎 Награды</Text>
-          <View style={styles.rewardRow}>
-            <Text style={styles.rewardText}>Победа: +{EXP_REWARDS.WIN_ONLINE} опыта</Text>
+          <View style={styles.rewardHeader}>
+            <Text style={styles.rewardTitle}>💎 Награды за онлайн игру</Text>
           </View>
-          <View style={styles.rewardRow}>
-            <Text style={styles.rewardText}>Поражение: +{EXP_REWARDS.LOSE_ONLINE} опыта</Text>
+          <View style={styles.expRow}>
+            <Text style={styles.expText}>Победа: +{EXP_REWARDS.WIN_ONLINE} опыта</Text>
+          </View>
+          <View style={styles.expRow}>
+            <Text style={styles.expText}>Поражение: +{EXP_REWARDS.LOSE_ONLINE} опыта</Text>
           </View>
         </View>
 
+        {/* Выбор режима игры (горизонтальные кнопки, как в BotDifficultyScreen) */}
         <Text style={styles.subtitle}>Выберите режим игры</Text>
+        <View style={styles.gameTypeContainer}>
+          {gameTypes.map((type) => (
+            <TouchableOpacity
+              key={type.id}
+              style={[
+                styles.gameTypeButton,
+                gameType === type.id && styles.gameTypeButtonSelected,
+              ]}
+              onPress={() => setGameType(type.id)}
+            >
+              <Text style={styles.gameTypeEmoji}>{type.emoji}</Text>
+              <Text style={[
+                styles.gameTypeText,
+                gameType === type.id && styles.gameTypeTextSelected,
+              ]}>
+                {type.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        {gameTypes.map((type) => (
-          <TouchableOpacity
-            key={type.id}
-            style={[
-              styles.card,
-              gameType === type.id && styles.selectedCard,
-            ]}
-            onPress={() => setGameType(type.id)}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={styles.emoji}>{type.emoji}</Text>
-              <Text style={styles.typeName}>{type.name}</Text>
-            </View>
-            <Text style={styles.description}>{type.description}</Text>
-            {gameType === type.id && (
-              <View style={styles.selectedBadge}>
-                <Text style={styles.selectedText}>✓ Выбрано</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-
-        <TouchableOpacity
-          style={[styles.startButton, !gameType && styles.startButtonDisabled]}
-          onPress={handleStart}
-          activeOpacity={0.8}
-          disabled={!gameType}
-        >
-          <Text style={styles.startButtonText}>🎮 Найти соперника</Text>
-        </TouchableOpacity>
-
+        {/* Информационный блок (как подсказка) */}
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>ℹ️ Как это работает</Text>
           <Text style={styles.infoText}>
@@ -120,6 +103,18 @@ const OnlineGameSetupScreen = ({ navigation }) => {
             • Играйте и побеждайте!
           </Text>
         </View>
+
+        {/* Кнопка старта (такая же, как в BotDifficultyScreen) */}
+        <TouchableOpacity
+          style={[styles.startButton, !gameType && styles.startButtonDisabled]}
+          onPress={handleStart}
+          disabled={!gameType}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.startButtonText}>
+            {gameType ? '🎮 Найти соперника' : 'Выберите режим'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </Animated.View>
   );
@@ -163,7 +158,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   levelBadgeText: {
     fontSize: 16,
@@ -171,24 +166,26 @@ const styles = StyleSheet.create({
     color: '#1a2a3a',
   },
   rewardBox: {
-    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    backgroundColor: '#2c3e50',
     borderRadius: 16,
     padding: 16,
     marginBottom: 20,
     borderWidth: 2,
     borderColor: '#4ECDC4',
   },
+  rewardHeader: {
+    marginBottom: 10,
+  },
   rewardTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#4ECDC4',
-    marginBottom: 10,
     textAlign: 'center',
   },
-  rewardRow: {
-    marginBottom: 4,
+  expRow: {
+    marginBottom: 6,
   },
-  rewardText: {
+  expText: {
     fontSize: 14,
     color: colors.textLight,
     textAlign: 'center',
@@ -198,79 +195,68 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: colors.textLight,
-    marginBottom: 20,
+    marginBottom: 16,
     textAlign: 'center',
   },
-  card: {
+  gameTypeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  gameTypeButton: {
+    flex: 1,
     backgroundColor: '#2c3e50',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    padding: 16,
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  selectedCard: {
+  gameTypeButtonSelected: {
     borderColor: colors.primary,
     backgroundColor: '#3a4a5a',
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  emoji: {
+  gameTypeEmoji: {
     fontSize: 32,
-    marginRight: 12,
+    marginBottom: 8,
   },
-  typeName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textLight,
-  },
-  description: {
+  gameTypeText: {
     fontSize: 14,
     color: '#aaa',
-    lineHeight: 20,
-  },
-  selectedBadge: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  selectedText: {
-    color: '#fff',
-    fontSize: 12,
+    textAlign: 'center',
     fontWeight: '600',
   },
+  gameTypeTextSelected: {
+    color: colors.textLight,
+  },
   infoBox: {
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    backgroundColor: '#2c3e50',
     borderRadius: 16,
     padding: 16,
-    marginTop: 10,
+    marginTop: 6,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(78, 205, 196, 0.3)',
+    borderColor: 'rgba(78, 205, 196, 0.5)',
   },
   infoTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#4ECDC4',
-    marginBottom: 8,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   infoText: {
     fontSize: 14,
     color: '#aaa',
     lineHeight: 22,
+    textAlign: 'center',
   },
   startButton: {
     backgroundColor: colors.primary,
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 32,
-    marginTop: 24,
-    marginBottom: 16,
+    marginTop: 16,
     alignItems: 'center',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -282,6 +268,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#555',
     shadowOpacity: 0,
     elevation: 0,
+    opacity: 0.5,
   },
   startButtonText: {
     fontSize: 18,

@@ -10,7 +10,8 @@
       "Bash(node -c src/utils/giftSystem.js)",
       "Bash(node -c src/context/DailyTasksContext.js)",
       "Bash(node *)",
-      "Bash(./gradlew assembleRelease)"
+      "Bash(./gradlew assembleRelease)",
+      "Bash(eas build:list *)"
     ]
   }
 }

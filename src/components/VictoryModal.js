@@ -7,20 +7,25 @@ import { shouldReceiveGift, getGiftForLevel } from '../utils/giftSystem';
 import GiftReceivedModal from './GiftReceivedModal';
 import TaskCompletedModal from './TaskCompletedModal';
 import { useDailyTasks } from '../context/DailyTasksContext';
+import { useAuth } from '../context/AuthContext';
+import { ref, get } from 'firebase/database';
+import { db } from '../firebase/config';
 
 const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft = false, navigation, hasNewGift = false, playerSurrendered = false }) => {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [receivedGift, setReceivedGift] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const { newlyCompletedTask, clearCompletedTask } = useDailyTasks();
+  const { userId } = useAuth();
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [currentExp, setCurrentExp] = useState(oldExp);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const levelUpAnim = useRef(new Animated.Value(0)).current;
 
   const oldLevelInfo = getLevelFromExp(oldExp);
-  const newLevelInfo = getLevelFromExp(oldExp + expGained);
+  const newLevelInfo = getLevelFromExp(currentExp + expGained);
   const leveledUp = newLevelInfo.level > oldLevelInfo.level;
 
   const oldProgress = oldLevelInfo.currentLevelExp / oldLevelInfo.expForNextLevel;
@@ -28,6 +33,24 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
 
   const levelColor = getLevelColor(newLevelInfo.level);
   const rankName = getRankName(newLevelInfo.level);
+
+  // Обновляем текущий опыт из Firebase при открытии модалки
+  useEffect(() => {
+    if (visible && userId) {
+      const fetchCurrentExp = async () => {
+        try {
+          const userStatsRef = ref(db, `users/${userId}/stats`);
+          const statsSnap = await get(userStatsRef);
+          const stats = statsSnap.val() || { exp: 0 };
+          setCurrentExp(stats.exp || 0);
+        } catch (error) {
+          console.error('Ошибка загрузки текущего опыта:', error);
+          setCurrentExp(oldExp);
+        }
+      };
+      fetchCurrentExp();
+    }
+  }, [visible, userId, oldExp]);
 
   useEffect(() => {
     if (visible) {
@@ -105,7 +128,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
       setShowGiftModal(false);
       setShowTaskModal(false);
     }
-  }, [visible, leveledUp, newlyCompletedTask]);
+  }, [visible, leveledUp, newlyCompletedTask, currentExp]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -163,6 +186,9 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
 
             <Text style={styles.progressText}>
               {leveledUp ? `${oldLevelInfo.currentLevelExp + expGained} / ${oldLevelInfo.expForNextLevel}` : `${newLevelInfo.currentLevelExp} / ${newLevelInfo.expForNextLevel}`}
+            </Text>
+            <Text style={styles.totalExpText}>
+              Всего опыта: {currentExp + expGained}
             </Text>
           </View>
 
@@ -322,6 +348,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8e8e93',
     textAlign: 'center',
+  },
+  totalExpText: {
+    fontSize: 12,
+    color: '#4ECDC4',
+    textAlign: 'center',
+    marginTop: 4,
+    fontWeight: '600',
   },
   levelUpContainer: {
     backgroundColor: 'rgba(255, 215, 0, 0.15)',

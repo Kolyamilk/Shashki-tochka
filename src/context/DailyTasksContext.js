@@ -285,16 +285,21 @@ export const DailyTasksProvider = ({ children }) => {
         const userStatsRef = ref(db, `users/${userId}/stats`);
         const statsSnap = await get(userStatsRef);
         const stats = statsSnap.val() || { exp: 0 };
-        const newExp = (stats.exp || 0) + TASK_REWARD;
+        const oldExp = stats.exp || 0;
+        const newExp = oldExp + TASK_REWARD;
 
         await update(userStatsRef, { exp: newExp });
-        const levelInfo = getLevelFromExp(newExp);
-        setUserLevel(levelInfo.level);
+        const oldLevelInfo = getLevelFromExp(oldExp);
+        const newLevelInfo = getLevelFromExp(newExp);
+        setUserLevel(newLevelInfo.level);
+
+        const leveledUp = newLevelInfo.level > oldLevelInfo.level;
 
         // Проверяем, все ли задания выполнены
         const allCompleted = tasks.every(t => t.completed);
-        if (allCompleted) {
-          // Даем жетон обновления заданий
+
+        // Даем жетон если: 1) все задания выполнены ИЛИ 2) повысился уровень
+        if (allCompleted || leveledUp) {
           const userRef = ref(db, `users/${userId}`);
           const userSnap = await get(userRef);
           const userData = userSnap.val() || {};

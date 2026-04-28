@@ -53,18 +53,26 @@ const BotDifficultyScreen = ({ navigation }) => {
   };
 
   return (
-    <Animated.View style={[styles.wrapper, { backgroundColor }]}>
-      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 20) }]}>
-      <Text style={styles.title}>Игра с компьютером</Text>
-
-      {/* Текущий уровень */}
-      <View style={styles.levelBadge}>
-        <Text style={styles.levelBadgeText}>Ваш уровень: {currentLevel}</Text>
+    <Animated.View style={[styles.container, { backgroundColor }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>← Назад</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Игра с компьютером</Text>
+        <View style={{ width: 70 }} />
       </View>
 
-      {/* Выбор режима игры */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Режим игры</Text>
+      <ScrollView 
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Текущий уровень */}
+        <View style={styles.levelBadge}>
+          <Text style={styles.levelBadgeText}>Ваш уровень: {currentLevel}</Text>
+        </View>
+
+        {/* Выбор режима игры */}
+        <Text style={styles.subtitle}>Выберите режим игры</Text>
         <View style={styles.gameTypeContainer}>
           {gameTypes.map((type) => (
             <TouchableOpacity
@@ -85,11 +93,9 @@ const BotDifficultyScreen = ({ navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
-      </View>
 
-      {/* Выбор сложности */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Сложность</Text>
+        {/* Выбор сложности */}
+        <Text style={styles.subtitle}>Выберите сложность</Text>
         {difficulties.map((diff) => (
           <TouchableOpacity
             key={diff.value}
@@ -99,7 +105,7 @@ const BotDifficultyScreen = ({ navigation }) => {
             ]}
             onPress={() => setSelectedDifficulty(diff.value)}
           >
-            <View>
+            <View style={styles.difficultyContent}>
               <Text style={[
                 styles.difficultyName,
                 selectedDifficulty === diff.value && styles.difficultyNameSelected,
@@ -117,76 +123,87 @@ const BotDifficultyScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
         ))}
-      </View>
 
-      {/* Кнопки действий */}
-      <TouchableOpacity
-        style={[styles.startButton, !selectedDifficulty && styles.startButtonDisabled]}
-        onPress={handleStart}
-        disabled={!selectedDifficulty}
-      >
-        <Text style={styles.startButtonText}>
-          {selectedDifficulty ? 'Начать игру' : 'Выберите сложность'}
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backButtonText}>Назад</Text>
-      </TouchableOpacity>
+        {/* Кнопка старта */}
+        <TouchableOpacity
+          style={[styles.startButton, !selectedDifficulty && styles.startButtonDisabled]}
+          onPress={handleStart}
+          disabled={!selectedDifficulty}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.startButtonText}>
+            {selectedDifficulty ? '🎮 Начать игру' : 'Выберите сложность'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
+  container: {
     flex: 1,
   },
-  container: {
-    flexGrow: 1,
-    padding: 20,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 8, // уменьшено
+    borderBottomWidth: 1,
+    borderBottomColor: '#444',
+  },
+  backButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+  },
+  backButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.textLight,
-    marginBottom: 20,
-    textAlign: 'center',
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
   levelBadge: {
     backgroundColor: '#4ECDC4',
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 20,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   levelBadgeText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1a2a3a',
   },
-  section: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 20,
+  subtitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: colors.textLight,
-    marginBottom: 15,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   gameTypeContainer: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
+    marginBottom: 16,
   },
   gameTypeButton: {
     flex: 1,
     backgroundColor: '#2c3e50',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    padding: 12,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
@@ -196,11 +213,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#3a4a5a',
   },
   gameTypeEmoji: {
-    fontSize: 32,
-    marginBottom: 8,
+    fontSize: 28,
+    marginBottom: 4,
   },
   gameTypeText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#aaa',
     textAlign: 'center',
     fontWeight: '600',
@@ -210,9 +227,9 @@ const styles = StyleSheet.create({
   },
   difficultyButton: {
     backgroundColor: '#2c3e50',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -223,63 +240,63 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: '#3a4a5a',
   },
+  difficultyContent: {
+    flex: 1,
+  },
   difficultyName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#aaa',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   difficultyNameSelected: {
     color: colors.textLight,
   },
   difficultyDescription: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#888',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   expInfo: {
     flexDirection: 'row',
     gap: 12,
   },
   expText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#4ECDC4',
     fontWeight: '600',
   },
   checkmark: {
-    fontSize: 24,
+    fontSize: 20,
     color: colors.primary,
     fontWeight: 'bold',
+    marginLeft: 8,
   },
   startButton: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    marginTop: 10,
-    marginBottom: 15,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    marginTop: 16,
+    marginBottom: 8,
     alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   startButtonDisabled: {
     backgroundColor: '#555',
+    shadowOpacity: 0,
+    elevation: 0,
     opacity: 0.5,
   },
   startButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  backButton: {
-    backgroundColor: colors.secondary,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
 });
 

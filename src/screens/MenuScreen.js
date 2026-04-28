@@ -1,6 +1,6 @@
 // src/screens/MenuScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get, onValue, off } from 'firebase/database';
@@ -26,6 +26,7 @@ const MenuScreen = ({ navigation }) => {
   const [loadingUserData, setLoadingUserData] = useState(false);
   const [isConnected, setIsConnected] = useState(null); // null = проверяется, true = подключен, false = нет связи
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
 
   // Проверка подключения к Firebase
   const checkConnection = useCallback(async () => {
@@ -194,18 +195,62 @@ const MenuScreen = ({ navigation }) => {
   // Обработчик для кнопки "Найти соперника"
   const handleFindOpponent = () => {
     if (!isConnected) {
-      Alert.alert(
-        'Требуется интернет',
-        'Для игры с соперником необходимо подключение к интернету',
-        [{ text: 'Понятно' }]
-      );
+      setShowConnectionModal(true);
       return;
     }
     navigation.navigate('OnlineGameSetup');
   };
 
+  // Обработчик для кнопки "Задачи"
+  const handleDailyTasks = () => {
+    if (!isConnected) {
+      setShowConnectionModal(true);
+      return;
+    }
+    navigation.navigate('DailyTasks');
+  };
+
+  // Обработчик для топ игроков
+  const handleLeaderboard = () => {
+    if (!isConnected) {
+      setShowConnectionModal(true);
+      return;
+    }
+    navigation.navigate('Leaderboard');
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Модальное окно ошибки соединения */}
+      <Modal visible={showConnectionModal} transparent animationType="fade" onRequestClose={() => setShowConnectionModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>⚠️ Ошибка соединения</Text>
+            <Text style={styles.modalText}>Для доступа к этой функции необходимо подключение к интернету</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={async () => {
+                  setShowConnectionModal(false);
+                  await checkConnection();
+                }}
+                disabled={checkingConnection}
+              >
+                <Text style={styles.modalButtonText}>
+                  {checkingConnection ? 'Проверка...' : '🔄 Повторить'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowConnectionModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Закрыть</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Онлайн бейдж */}
       <TouchableOpacity
         style={[styles.onlineContainer, { top: insets.top + 10 }]}
@@ -256,20 +301,13 @@ const MenuScreen = ({ navigation }) => {
           // Показываем кнопки меню всегда (офлайн и онлайн)
           <View style={styles.centerContainer}>
           {/* Кнопка ежедневных заданий */}
-          {getCompletedCount() === 3 ? (
+          {getCompletedCount() === 3 && isConnected ? (
             <TouchableOpacity
               style={[
                 styles.button,
                 styles.tasksButtonCompleted,
-                !isConnected && styles.disabledButton
               ]}
-              onPress={() => {
-                if (!isConnected) {
-                  Alert.alert('Требуется интернет', 'Для доступа к заданиям необходимо подключение к интернету');
-                  return;
-                }
-                navigation.navigate('DailyTasks');
-              }}
+              onPress={handleDailyTasks}
               activeOpacity={0.8}
             >
               <View style={styles.completedTasksContent}>
@@ -289,13 +327,7 @@ const MenuScreen = ({ navigation }) => {
                 styles.tasksButton,
                 !isConnected && styles.disabledButton
               ]}
-              onPress={() => {
-                if (!isConnected) {
-                  Alert.alert('Требуется интернет', 'Для доступа к заданиям необходимо подключение к интернету');
-                  return;
-                }
-                navigation.navigate('DailyTasks');
-              }}
+              onPress={handleDailyTasks}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonText}>
@@ -314,7 +346,7 @@ const MenuScreen = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>
-              {!isConnected ? '🔒 Найти соперника (требуется интернет)' : '🎯 Найти соперника'}
+              {!isConnected ? '🔒 Найти соперника' : '🎯 Найти соперника'}
             </Text>
           </TouchableOpacity>
 
@@ -337,30 +369,48 @@ const MenuScreen = ({ navigation }) => {
         )}
 
         {/* Топ-3 игроков */}
-        {topPlayers.length > 0 && (
+        {(topPlayers.length > 0 || !isConnected) && (
           <View style={[styles.topContainer, !isConnected && styles.blurredSection]}>
             <Text style={styles.topTitle}>🏆 Топ-3 игроков</Text>
-            <View style={styles.topPlayersList}>
-              <FlatList
-                data={topPlayers}
-                renderItem={renderTopPlayer}
-                keyExtractor={(_, index) => index.toString()}
-                scrollEnabled={false}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.showAllButton}
-              onPress={() => {
-                if (!isConnected) {
-                  Alert.alert('Требуется интернет', 'Для просмотра рейтинга необходимо подключение к интернету');
-                  return;
-                }
-                navigation.navigate('Leaderboard');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
-            </TouchableOpacity>
+            {isConnected && topPlayers.length > 0 ? (
+              <>
+                <View style={styles.topPlayersList}>
+                  <FlatList
+                    data={topPlayers}
+                    renderItem={renderTopPlayer}
+                    keyExtractor={(_, index) => index.toString()}
+                    scrollEnabled={false}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.showAllButton}
+                  onPress={handleLeaderboard}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.topPlayersList}>
+                  {[1, 2, 3].map((index) => (
+                    <View key={index} style={styles.topPlayer}>
+                      <Text style={styles.topRank}>{index}</Text>
+                      <Text style={styles.topAvatar}>👤</Text>
+                      <Text style={styles.topName}>Игрок {index}</Text>
+                      <Text style={[styles.topLevel, { color: '#888' }]}>Ур. --</Text>
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.showAllButton}
+                  onPress={handleLeaderboard}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.showAllText}>Показать весь рейтинг →</Text>
+                </TouchableOpacity>
+              </>
+            )}
             {!isConnected && (
               <View style={styles.offlineOverlay}>
                 <Text style={styles.offlineOverlayText}>🔒 Требуется интернет</Text>
@@ -598,6 +648,58 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
     backgroundColor: '#555',
+  },
+
+  /* Модальное окно */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#2c3e50',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e74c3c',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    color: colors.textLight,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    backgroundColor: '#e74c3c',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#7f8c8d',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   /* Топ-3 игроков */

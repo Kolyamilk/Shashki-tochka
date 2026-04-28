@@ -31,9 +31,10 @@ import { colors } from './src/styles/globalStyles';
 import { GameTypeProvider } from './src/context/GameTypeContext';
 import GameTypeScreen from './src/screens/GameTypeScreen';
 import { InviteProvider } from './src/context/InviteContext';
-import { DailyTasksProvider } from './src/context/DailyTasksContext';
+import { DailyTasksProvider, useDailyTasks } from './src/context/DailyTasksContext';
 import ProfileGiftScreen from './src/screens/ProfileGiftScreen';
 import InviteModal from './src/screens/InviteModal';
+import TaskCompletedModal from './src/components/TaskCompletedModal';
 
 const Stack = createNativeStackNavigator();
 
@@ -48,6 +49,7 @@ if (!isExpoGo) {
 
 function AppNavigator() {
   const { userId, loading } = useAuth();
+  const { newlyCompletedTask, clearCompletedTask } = useDailyTasks();
   const navigationRef = useRef(null);
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const appState = useRef(AppState.currentState);
@@ -427,6 +429,12 @@ function AppNavigator() {
         fromAvatar={currentInvite?.fromAvatar}
         fromLevel={currentInvite?.fromLevel}
         gameType={currentInvite?.gameType}
+      />
+
+      <TaskCompletedModal
+        visible={!!newlyCompletedTask}
+        task={newlyCompletedTask}
+        onClose={clearCompletedTask}
       />
     </InviteProvider>
   );
