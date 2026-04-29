@@ -16,7 +16,7 @@
       "bundleIdentifier": "com.yourcompany.checkersonline"
     },
     "android": {
-      "versionCode": 19,
+      "versionCode": 20,
       "package": "com.anonymous.CheckersOnline",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
