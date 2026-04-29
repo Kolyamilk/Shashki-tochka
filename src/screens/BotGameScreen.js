@@ -319,8 +319,11 @@ const BotGameScreen = ({ route, navigation }) => {
     }).catch(console.error);
       }
 
+      // Даём время DailyTasksContext обработать выполненное задание
+      await new Promise(resolve => setTimeout(resolve, 150));
+
       // Показываем модальное окно победы
-      setVictoryData({ isWin, expGained, oldExp, hasNewGift });
+      setVictoryData({ isWin, expGained, oldExp, hasNewGift: hasNewGift || false, playerSurrendered: false });
       setVictoryModalVisible(true);
     };
 
@@ -416,10 +419,10 @@ const BotGameScreen = ({ route, navigation }) => {
               console.error('Ошибка обновления заданий при таймауте:', error);
             }
           }
-        })();
-
+          await new Promise(resolve => setTimeout(resolve, 150));
         setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
         setVictoryModalVisible(true);
+        })();
       }
     };
 
@@ -487,10 +490,12 @@ const BotGameScreen = ({ route, navigation }) => {
                   console.error('Ошибка обновления заданий при таймауте:', error);
                 }
               }
+              await new Promise(resolve => setTimeout(resolve, 150));
+              setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
+            setVictoryModalVisible(true);
             })();
 
-            setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: false });
-            setVictoryModalVisible(true);
+            
           }
         }
         backgroundTimeRef.current = null;
@@ -922,23 +927,26 @@ const BotGameScreen = ({ route, navigation }) => {
         {
           text: 'Сдаться',
           style: 'destructive',
-          onPress: async () => {
-            // Вызываем endGame с флагом сдачи (победа бота)
-            if (gameIdRef.current) {
-              try {
-                await update(ref(db, `bot_games/${gameIdRef.current}`), {
-                  status: 'finished',
-                  finishedAt: Date.now(),
-                  result: 'player_gave_up',
-                });
-              } catch (error) {
-                console.error('Ошибка обновления bot_games:', error);
-              }
-            }
-            // Показываем модальное окно с сообщением о сдаче (без начисления опыта)
+          onPress: () => {
+            // Сразу локально завершаем игру
             setGameOver(true);
-            setVictoryData({ isWin: false, expGained: 0, oldExp: 0, hasNewGift: false, playerSurrendered: true });
+            setVictoryData({
+              isWin: false,
+              expGained: 0,
+              oldExp: 0,
+              hasNewGift: false,
+              playerSurrendered: true,
+            });
             setVictoryModalVisible(true);
+
+            // Пытаемся отправить результат на сервер в фоне
+            if (gameIdRef.current) {
+              update(ref(db, `bot_games/${gameIdRef.current}`), {
+                status: 'finished',
+                finishedAt: Date.now(),
+                result: 'player_gave_up',
+              }).catch(err => console.log('Не удалось отправить сдачу на сервер'));
+            }
           },
         },
       ]

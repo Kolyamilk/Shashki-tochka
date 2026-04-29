@@ -23,26 +23,35 @@ const ProfileScreen = ({ navigation }) => {
   const [sendingReport, setSendingReport] = useState(false);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!userId) {
-        setLoading(false);
-        return;
+  const loadProfile = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    // Таймаут 5 секунд
+    const timer = setTimeout(() => {
+      setLoading(false);
+      Alert.alert('Нет соединения', 'Не удалось загрузить профиль. Проверьте интернет и попробуйте снова.');
+    }, 5000);
+
+    try {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+      clearTimeout(timer);
+      if (snapshot.exists()) {
+        setUserData(snapshot.val());
+        setExpHistory(snapshot.val().expHistory || []);
       }
-      try {
-        const userRef = ref(db, `users/${userId}`);
-        const snapshot = await get(userRef);
-        if (snapshot.exists()) {
-          setUserData(snapshot.val());
-          setExpHistory(snapshot.val().expHistory || []);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadProfile();
-  }, [userId]);
+    } catch (error) {
+      clearTimeout(timer);
+      console.error(error);
+      Alert.alert('Ошибка', 'Не удалось загрузить профиль.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  loadProfile();
+}, [userId]);
 
   const handleLogout = () => {
     Alert.alert(

@@ -1,6 +1,6 @@
 // src/screens/MenuScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, ScrollView, Modal,AppState  } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ref, get, onValue, off } from 'firebase/database';
@@ -31,6 +31,11 @@ const MenuScreen = ({ navigation }) => {
   // Проверка подключения к Firebase
   const checkConnection = useCallback(async () => {
     if (!userId) return;
+
+     if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    setIsConnected(false);
+    return;
+  }
     setCheckingConnection(true);
     try {
       // Пробуем загрузить данные пользователя как тест подключения с таймаутом
@@ -195,7 +200,16 @@ const MenuScreen = ({ navigation }) => {
       off(statusRef);
     };
   }, []);
-
+useEffect(() => {
+  const handleAppStateChange = (nextAppState) => {
+    if (nextAppState === 'active') {
+      // При возврате в приложение пытаемся переподключиться
+      checkConnection();
+    }
+  };
+  const subscription = AppState.addEventListener('change', handleAppStateChange);
+  return () => subscription?.remove();
+}, [checkConnection]);
   const renderTopPlayer = ({ item, index }) => {
     const level = getLevelFromExp(item.stats?.exp || 0).level;
     const levelColor = getLevelColor(level);
@@ -430,10 +444,16 @@ const MenuScreen = ({ navigation }) => {
         {/* Нижняя панель */}
         <View style={styles.bottomPanel}>
           <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}
-            activeOpacity={0.8}
-          >
+  style={styles.profileButton}
+  onPress={() => {
+    if (isConnected === true) {
+      navigation.navigate('Profile');
+    } else {
+      setShowConnectionModal(true);
+    }
+  }}
+  activeOpacity={0.8}
+>
             {userData ? (
               <View style={styles.profileInfo}>
                 <View style={styles.avatarContainer}>

@@ -18,14 +18,13 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
   const { newlyCompletedTask, clearCompletedTask } = useDailyTasks();
   const { userId } = useAuth();
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [currentExp, setCurrentExp] = useState(oldExp);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const levelUpAnim = useRef(new Animated.Value(0)).current;
 
   const oldLevelInfo = getLevelFromExp(oldExp);
-  const newLevelInfo = getLevelFromExp(currentExp + expGained);
+  const newLevelInfo = getLevelFromExp(oldExp  + expGained);
   const leveledUp = newLevelInfo.level > oldLevelInfo.level;
 
   const oldProgress = oldLevelInfo.currentLevelExp / oldLevelInfo.expForNextLevel;
@@ -34,23 +33,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
   const levelColor = getLevelColor(newLevelInfo.level);
   const rankName = getRankName(newLevelInfo.level);
 
-  // Обновляем текущий опыт из Firebase при открытии модалки
-  useEffect(() => {
-    if (visible && userId) {
-      const fetchCurrentExp = async () => {
-        try {
-          const userStatsRef = ref(db, `users/${userId}/stats`);
-          const statsSnap = await get(userStatsRef);
-          const stats = statsSnap.val() || { exp: 0 };
-          setCurrentExp(stats.exp || 0);
-        } catch (error) {
-          console.error('Ошибка загрузки текущего опыта:', error);
-          setCurrentExp(oldExp);
-        }
-      };
-      fetchCurrentExp();
-    }
-  }, [visible, userId, oldExp]);
+
 
   useEffect(() => {
     if (visible) {
@@ -128,7 +111,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
       setShowGiftModal(false);
       setShowTaskModal(false);
     }
-  }, [visible, leveledUp, newlyCompletedTask, currentExp]);
+  }, [visible, leveledUp, newlyCompletedTask]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -205,7 +188,7 @@ const VictoryModal = ({ visible, isWin, expGained, oldExp, onClose, opponentLeft
               {leveledUp ? `${oldLevelInfo.currentLevelExp + expGained} / ${oldLevelInfo.expForNextLevel}` : `${newLevelInfo.currentLevelExp} / ${newLevelInfo.expForNextLevel}`}
             </Text>
             <Text style={styles.totalExpText}>
-              Всего опыта: {currentExp + expGained}
+              Всего опыта: {oldExp  + expGained}
             </Text>
           </View>
           )}
