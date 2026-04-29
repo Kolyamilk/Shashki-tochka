@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { ref, get, update } from 'firebase/database';
 import { db } from '../firebase/config';
 import { useAuth } from './AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLevelFromExp } from '../utils/levelSystem';
 import {
   generateDailyTasks,
@@ -35,7 +36,7 @@ export const DailyTasksProvider = ({ children }) => {
   const [userLevel, setUserLevel] = useState(1);
   const [nextRefreshTime, setNextRefreshTime] = useState(null);
   const [canRefresh, setCanRefresh] = useState(false);
-
+const TASKS_STORAGE_KEY = '@daily_tasks_local';
   // Вспомогательная: конвертация старого строкового формата в timestamp
   const convertLegacyRefreshDate = (dateStr) => {
     if (!dateStr) return null;
@@ -164,67 +165,97 @@ export const DailyTasksProvider = ({ children }) => {
 
   // Загрузка заданий из Firebase (при старте и смене userId)
   useEffect(() => {
-    if (!userId) {
+  if (!userId) {
+    setLoading(false);
+    setUserLevel(1);
+    return;
+  }
 
-      setLoading(false);
-      setUserLevel(1);
-      return;
-    }
+  const loadTasks = async () => {
+    try {
+      const today = getTodayDate();
+      let tasksFromServer = null;
+      let serverRefreshTimestamp = null;
 
-
-    const loadTasks = async () => {
+      // Пытаемся получить данные с сервера
       try {
         const tasksRef = ref(db, `users/${userId}/dailyTasks`);
         const snapshot = await get(tasksRef);
         const data = snapshot.val();
-
-        const today = getTodayDate();
-
-        // Преобразуем legacy поле lastManualRefreshDate в timestamp, если нужно
-        let refreshTimestamp = null;
-        if (data?.lastManualRefreshTimestamp) {
-          refreshTimestamp = data.lastManualRefreshTimestamp;
-        } else if (data?.lastManualRefreshDate) {
-          refreshTimestamp = convertLegacyRefreshDate(data.lastManualRefreshDate);
+        if (data && !shouldUpdateTasks(data.lastUpdateDate) && data.version === DAILY_TASKS_VERSION) {
+          tasksFromServer = data.tasks || [];
+          serverRefreshTimestamp = data.lastManualRefreshTimestamp || null;
         }
-
-        // Если нет данных или сменился день (или версия устарела)
-        if (!data || shouldUpdateTasks(data.lastUpdateDate) || data.version !== DAILY_TASKS_VERSION) {
-          const newTasks = generateDailyTasks(today, null, userId);
-          await update(ref(db, `users/${userId}`), {
-            dailyTasks: {
-              tasks: newTasks,
-              lastUpdateDate: today,
-              lastManualRefreshTimestamp: refreshTimestamp,
-              version: DAILY_TASKS_VERSION,
-            },
-          });
-          setTasks(newTasks);
-          setLastUpdateDate(today);
-          setLastManualRefreshTimestamp(refreshTimestamp);
-        } else {
-          // Загружаем существующие задания
-          setTasks(data.tasks || []);
-          setLastUpdateDate(data.lastUpdateDate);
-          setLastManualRefreshTimestamp(refreshTimestamp);
-        }
-
-        // Получаем уровень пользователя
-        const statsRef = ref(db, `users/${userId}/stats`);
-        const statsSnap = await get(statsRef);
-        const stats = statsSnap.val() || { exp: 0 };
-        const levelInfo = getLevelFromExp(stats.exp || 0);
-        setUserLevel(levelInfo.level);
-      } catch (error) {
-        console.error('Ошибка загрузки ежедневных заданий:', error);
-      } finally {
-        setLoading(false);
-        
+      } catch (e) {
+        console.warn('Сервер недоступен, пробуем локальный кэш');
       }
-    };
 
-    loadTasks();
-  }, [userId]);
+      // Загружаем локальный кэш
+      let tasksFromLocal = null;
+      try {
+        const localStr = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
+        if (localStr) {
+          const localData = JSON.parse(localStr);
+          if (localData.lastUpdateDate === today) {
+            tasksFromLocal = localData.tasks || [];
+          }
+        }
+      } catch (e) {
+        console.warn('Ошибка чтения локальных заданий');
+      }
+
+      // Определяем, какие задания использовать (более прогрессивные)
+      let finalTasks;
+      if (tasksFromServer && tasksFromLocal) {
+        // Есть и те, и другие – берём с максимальным прогрессом
+        finalTasks = tasksFromServer.map((serverTask, idx) => {
+          const localTask = tasksFromLocal.find(t => t.id === serverTask.id);
+          if (localTask && localTask.progress > serverTask.progress) {
+            return { ...serverTask, progress: localTask.progress, completed: localTask.completed };
+          }
+          return serverTask;
+        });
+        // Если локальные задания были прогрессивнее, отправляем их на сервер
+        if (JSON.stringify(finalTasks) !== JSON.stringify(tasksFromServer)) {
+          update(ref(db, `users/${userId}/dailyTasks`), {
+            tasks: finalTasks,
+            lastUpdateDate: today,
+            lastManualRefreshTimestamp: tasksFromLocal.timestamp || serverRefreshTimestamp,
+            version: DAILY_TASKS_VERSION,
+          }).catch(e => console.warn('Не удалось синхронизировать локальные задания'));
+        }
+      } else if (tasksFromServer) {
+        finalTasks = tasksFromServer;
+      } else if (tasksFromLocal) {
+        finalTasks = tasksFromLocal;
+        // Пытаемся запушить локальные на сервер
+        update(ref(db, `users/${userId}/dailyTasks`), {
+          tasks: finalTasks,
+          lastUpdateDate: today,
+          version: DAILY_TASKS_VERSION,
+        }).catch(e => console.warn('Не удалось отправить локальные задания на сервер'));
+      } else {
+        // Ничего нет – генерируем новые
+        finalTasks = generateDailyTasks(today, null, userId);
+        update(ref(db, `users/${userId}/dailyTasks`), {
+          tasks: finalTasks,
+          lastUpdateDate: today,
+          version: DAILY_TASKS_VERSION,
+        }).catch(e => console.warn('Не удалось сохранить новые задания'));
+      }
+
+      setTasks(finalTasks);
+      setLastUpdateDate(today);
+      setLastManualRefreshTimestamp(serverRefreshTimestamp);
+    } catch (error) {
+      console.error('Ошибка загрузки ежедневных заданий:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadTasks();
+}, [userId]);
 
   // Периодическое обновление уровня пользователя и статуса canRefresh
   useEffect(() => {
@@ -349,14 +380,25 @@ export const DailyTasksProvider = ({ children }) => {
     }
 
     if (updatedTasksForDb) {
-      try {
-        await update(ref(db, `users/${userId}/dailyTasks`), {
-          tasks: updatedTasksForDb,
-        });
-      } catch (error) {
-        console.error('Ошибка сохранения прогресса заданий:', error);
-      }
-    }
+  // 1. Сначала сохраняем локально, чтобы не потерять прогресс
+  try {
+    await AsyncStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify({
+      tasks: updatedTasksForDb,
+      lastUpdateDate: getTodayDate(),
+      timestamp: Date.now(),
+    }));
+  } catch (e) {
+    console.warn('Не удалось сохранить задания локально:', e);
+  }
+
+  // 2. Затем пытаемся отправить на сервер
+  try {
+    await update(ref(db, `users/${userId}/dailyTasks`), { tasks: updatedTasksForDb });
+  } catch (error) {
+    console.error('Ошибка синхронизации с сервером:', error);
+    // Прогресс уже сохранён локально, при следующей загрузке синхронизируем
+  }
+}
   };
 
   const clearCompletedTask = () => {
