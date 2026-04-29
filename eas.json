@@ -9,6 +9,12 @@
         "buildType": "apk"
       },
       "distribution": "internal"
+    },
+    "production": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      }
     }
   },
   "submit": {
