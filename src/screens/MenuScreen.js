@@ -29,42 +29,45 @@ const MenuScreen = ({ navigation }) => {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
 
   // Проверка подключения к Firebase
-  const checkConnection = useCallback(async () => {
-    if (!userId) return;
-
-     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    setIsConnected(false);
-    return;
-  }
-    setCheckingConnection(true);
+const checkConnection = useCallback(async () => {
+  if (!userId) return;
+  setCheckingConnection(true);
+  try {
+    const userRef = ref(db, `users/${userId}`);
+    // Таймаут 8 секунд для более надёжной проверки
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout')), 8000)
+    );
+    const userSnapshot = await Promise.race([get(userRef), timeoutPromise]);
+    if (userSnapshot.exists()) {
+      setIsConnected(true);
+      setUserData(userSnapshot.val());
+    } else {
+      setIsConnected(true); // пользователь есть в базе, значит связь точно есть
+    }
+  } catch (error) {
+    console.warn('Первая проверка не удалась, пробуем ещё раз...');
+    // Одна повторная попытка
     try {
-      // Пробуем загрузить данные пользователя как тест подключения с таймаутом
       const userRef = ref(db, `users/${userId}`);
-
-      // Создаем промис с таймаутом 5 секунд
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 5000)
+        setTimeout(() => reject(new Error('Timeout')), 8000)
       );
-
-      const userSnapshot = await Promise.race([
-        get(userRef),
-        timeoutPromise
-      ]);
-
+      const userSnapshot = await Promise.race([get(userRef), timeoutPromise]);
       if (userSnapshot.exists()) {
         setIsConnected(true);
         setUserData(userSnapshot.val());
       } else {
-        // Пользователь существует, но данных нет - все равно подключение есть
         setIsConnected(true);
       }
-    } catch (error) {
-      console.error('Ошибка подключения:', error);
+    } catch (secondError) {
+      console.error('Ошибка подключения после повтора:', secondError);
       setIsConnected(false);
-    } finally {
-      setCheckingConnection(false);
     }
-  }, [userId]);
+  } finally {
+    setCheckingConnection(false);
+  }
+}, [userId]);
 
   // Проверяем подключение при первой загрузке
   useEffect(() => {
