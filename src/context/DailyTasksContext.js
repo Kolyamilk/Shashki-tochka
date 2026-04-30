@@ -33,7 +33,6 @@ export const DailyTasksProvider = ({ children }) => {
   const [lastManualRefreshTimestamp, setLastManualRefreshTimestamp] = useState(null); // число (ms)
   const [loading, setLoading] = useState(true);
   const [newlyCompletedTask, setNewlyCompletedTask] = useState(null);
-  const [pendingReward, setPendingReward] = useState(null);
   const [userLevel, setUserLevel] = useState(1);
   const [nextRefreshTime, setNextRefreshTime] = useState(null);
   const [canRefresh, setCanRefresh] = useState(false);
@@ -312,49 +311,46 @@ const TASKS_STORAGE_KEY = '@daily_tasks_local';
     return () => clearInterval(interval);
   }, [userId, canManualRefresh]);
 
-  // Обработка награды за выполненное задание
-  useEffect(() => {
-    if (!pendingReward || !userId) return;
+  // Начисление награды за выполненное задание делаем внутри updateProgress()
+  // (чтобы опыт успевал обновиться до показа модалок/переходов экрана)
+  const applyTaskReward = useCallback(async (task) => {
+    if (!userId) return;
 
-    const { task } = pendingReward;
     setNewlyCompletedTask(task);
 
-    (async () => {
-      try {
-        const userStatsRef = ref(db, `users/${userId}/stats`);
-        const statsSnap = await get(userStatsRef);
-        const stats = statsSnap.val() || { exp: 0 };
-        const oldExp = stats.exp || 0;
-        const newExp = oldExp + TASK_REWARD;
+    try {
+      const userStatsRef = ref(db, `users/${userId}/stats`);
+      const statsSnap = await get(userStatsRef);
+      const stats = statsSnap.val() || { exp: 0 };
+      const oldExp = stats.exp || 0;
+      const newExp = oldExp + TASK_REWARD;
 
-        await update(userStatsRef, { exp: newExp });
-        const oldLevelInfo = getLevelFromExp(oldExp);
-        const newLevelInfo = getLevelFromExp(newExp);
-        setUserLevel(newLevelInfo.level);
+      await update(userStatsRef, { exp: newExp });
 
-        const leveledUp = newLevelInfo.level > oldLevelInfo.level;
+      const oldLevelInfo = getLevelFromExp(oldExp);
+      const newLevelInfo = getLevelFromExp(newExp);
+      setUserLevel(newLevelInfo.level);
 
-        // Проверяем, все ли задания выполнены
-        const allCompleted = tasks.every(t => t.completed);
+      const leveledUp = newLevelInfo.level > oldLevelInfo.level;
 
-        // Даем жетон если: 1) все задания выполнены ИЛИ 2) повысился уровень
-        if (allCompleted || leveledUp) {
-          const userRef = ref(db, `users/${userId}`);
-          const userSnap = await get(userRef);
-          const userData = userSnap.val() || {};
-          const currentTokens = userData.taskRefreshTokens || 0;
+      // Проверяем, все ли задания выполнены
+      const allCompleted = tasks.every(t => t.completed);
 
-          await update(userRef, {
-            taskRefreshTokens: currentTokens + 1,
-          });
-        }
-      } catch (error) {
-        console.error('Ошибка начисления награды за задание:', error);
+      // Даем жетон если: 1) все задания выполнены ИЛИ 2) повысился уровень
+      if (allCompleted || leveledUp) {
+        const userRef = ref(db, `users/${userId}`);
+        const userSnap = await get(userRef);
+        const userData = userSnap.val() || {};
+        const currentTokens = userData.taskRefreshTokens || 0;
+
+        await update(userRef, {
+          taskRefreshTokens: currentTokens + 1,
+        });
       }
-    })();
-
-    setPendingReward(null);
-  }, [pendingReward, userId, tasks]);
+    } catch (error) {
+      console.error('Ошибка начисления награды за задание:', error);
+    }
+  }, [userId, tasks]);
 
   // Синхронизируем ref с текущим состоянием (для корректной последовательной логики)
   useEffect(() => {
@@ -382,7 +378,7 @@ const TASKS_STORAGE_KEY = '@daily_tasks_local';
     setTasks(updatedTasks);
 
     if (newlyCompleted) {
-      setPendingReward({ task: newlyCompleted });
+      await applyTaskReward(newlyCompleted);
     }
 
     // 1) Сначала сохраняем локально, чтобы не потерять прогресс

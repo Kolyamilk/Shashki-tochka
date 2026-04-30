@@ -310,20 +310,57 @@ const BotGameScreen = ({ route, navigation }) => {
         }
       }
 
+      // Обновляем ежедневные задания при НИЧЬЕ (1 дамка у обоих / две дамки и т.п.)
+      // Без "победа" задач и без начисления EXP за сам результат.
+      if (userId && winner === null) {
+        try {
+          // Сброс серии побед (как при проигрыше в онлайн-игре)
+          const userRef = ref(db, `users/${userId}`);
+          const userSnap = await get(userRef);
+          const userData = userSnap.val() || {};
+          const currentStreak = userData.winStreak || 0;
+
+          if (currentStreak > 0) {
+            await update(userRef, { winStreak: 0 });
+            await updateProgress(TASK_TYPES.WIN_STREAK, 0);
+          }
+
+          // Засчитываем "сыграть игру"
+          await updateProgress(TASK_TYPES.PLAY_GAMES, 1);
+          if (isFakeOpponent) {
+            await updateProgress(TASK_TYPES.PLAY_ONLINE, 1);
+          }
+          if (gameType === 'giveaway') {
+            await updateProgress(TASK_TYPES.PLAY_GIVEAWAY, 1, gameType);
+          }
+
+          // Подсчёт съеденных шашек
+          const initialPiecesCount = 12;
+          const player2Pieces = board.flat().filter(p => p && p.player === 2).length;
+          const capturedByPlayer = initialPiecesCount - player2Pieces;
+
+          if (capturedByPlayer > 0) {
+            await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
+          }
+        } catch (error) {
+          console.error('Ошибка обновления заданий при ничьей:', error);
+        }
+      }
+
       if (gameIdRef.current) {
         const botGameRef = ref(db, `bot_games/${gameIdRef.current}`);
-       await update(botGameRef, {
-      status: 'finished',
-      finishedAt: Date.now(),
-      result: winner === 1 ? 'player_win' : (winner === 2 ? 'bot_win' : 'draw'),
-    }).catch(console.error);
+        await update(botGameRef, {
+          status: 'finished',
+          finishedAt: Date.now(),
+          result: winner === 1 ? 'player_win' : (winner === 2 ? 'bot_win' : 'draw'),
+        }).catch(console.error);
       }
 
       // Даём время DailyTasksContext обработать выполненное задание
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // Показываем модальное окно победы
-      setVictoryData({ isWin, expGained, oldExp, hasNewGift: hasNewGift || false, playerSurrendered: false });
+      setVictoryData({ isWin, expGained, oldExp, hasNewGift: hasNewGift || false, playerSurrendered: false, isDraw: winner === null });
       setVictoryModalVisible(true);
     };
 
