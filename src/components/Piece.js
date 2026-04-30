@@ -129,7 +129,6 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 2,
   },
   kingEmoji: {
     fontSize: 32,

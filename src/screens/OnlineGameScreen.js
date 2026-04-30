@@ -51,7 +51,9 @@ const updateStats = async (winnerId, loserId, isSurrender = false) => {
   const winnerOldExp = winnerStats.exp || 0;
   const loserOldExp = loserStats.exp || 0;
 
-  const winnerExpGain = isSurrender ? 150 : EXP_REWARDS.WIN_ONLINE;
+  // Сдача: победитель получает как за победу онлайн, сдающий — 0
+  // Таймаут/нет хода: это НЕ сдача, поэтому loser получает LOSE_ONLINE (0 только при surrender)
+  const winnerExpGain = EXP_REWARDS.WIN_ONLINE;
   const loserExpGain = isSurrender ? 0 : EXP_REWARDS.LOSE_ONLINE;
 
   const winnerNewExp = winnerOldExp + winnerExpGain;
@@ -270,8 +272,8 @@ const endGame = useCallback(async (resultMessage, winnerId = null, loserId = nul
   }
 
   // ☆☆☆ Обновление заданий ☆☆☆
-  // Пропускаем только если игрок сам сдался (не таймаут)
-  if (!(isSurrender && !isWin && !isTimeout)) {
+  // При сдаче тоже считаем прогресс ежедневных заданий игроку (но опыт за результат при surrender ему не начисляется).
+  if (true) {
     // Обновление серии побед
     try {
       const userRef = ref(db, `users/${playerKey}`);
@@ -442,7 +444,7 @@ const endGame = useCallback(async (resultMessage, winnerId = null, loserId = nul
     setAnimatingMove({
       from: { row: move.fromRow, col: move.fromCol },
       to: { row: move.toRow, col: move.toCol },
-      piece: { ...piece, king: willBeKing },
+      piece: { ...piece, king: piece.king || willBeKing },
       wasCapture: wasCapture,
     });
     isAnimatingRef.current = true;
@@ -833,12 +835,12 @@ const endGame = useCallback(async (resultMessage, winnerId = null, loserId = nul
         if (!opponentId) return;
 
         // Если это мой ход - я проиграл
-        if (gameData.currentPlayer === playerKey) {
-          endGame('Вы не сделали ход вовремя', opponentId, playerKey, true, true);
+          if (gameData.currentPlayer === playerKey) {
+          endGame('Вы не сделали ход вовремя', opponentId, playerKey, false, true);
         }
         // Если это ход противника - он проиграл, я выиграл
         else if (gameData.currentPlayer === opponentId) {
-          endGame('Противник не сделал ход вовремя', playerKey, opponentId, true, true);
+          endGame('Противник не сделал ход вовремя', playerKey, opponentId, false, true);
         }
       }
     };
@@ -868,7 +870,7 @@ const endGame = useCallback(async (resultMessage, winnerId = null, loserId = nul
           if (timeSinceLastMove >= ONE_MINUTE) {
             const opponentId = Object.keys(gameData.players).find(p => p !== playerKey);
             if (opponentId) {
-              endGame('Вы не сделали ход вовремя', opponentId, playerKey, true, true);
+              endGame('Вы не сделали ход вовремя', opponentId, playerKey, false, true);
             }
           }
         }
