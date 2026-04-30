@@ -1,6 +1,6 @@
 // src/context/DailyTasksContext.js
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { ref, get, update } from 'firebase/database';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { ref, get, update, runTransaction } from 'firebase/database';
 import { db } from '../firebase/config';
 import { useAuth } from './AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +28,7 @@ export const useDailyTasks = () => {
 export const DailyTasksProvider = ({ children }) => {
   const { userId } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const tasksRef = useRef([]);
   const [lastUpdateDate, setLastUpdateDate] = useState(null);
   const [lastManualRefreshTimestamp, setLastManualRefreshTimestamp] = useState(null); // число (ms)
   const [loading, setLoading] = useState(true);
@@ -207,20 +208,27 @@ const TASKS_STORAGE_KEY = '@daily_tasks_local';
       // Определяем, какие задания использовать (более прогрессивные)
       let finalTasks;
       if (tasksFromServer && tasksFromLocal) {
-        // Есть и те, и другие – берём с максимальным прогрессом
-        finalTasks = tasksFromServer.map((serverTask, idx) => {
+        // Есть и те, и другие – объединяем монотонно по progress
+        finalTasks = tasksFromServer.map((serverTask) => {
           const localTask = tasksFromLocal.find(t => t.id === serverTask.id);
-          if (localTask && localTask.progress > serverTask.progress) {
-            return { ...serverTask, progress: localTask.progress, completed: localTask.completed };
-          }
-          return serverTask;
+          const serverProgress = typeof serverTask?.progress === 'number' ? serverTask.progress : 0;
+          const localProgress = localTask && typeof localTask?.progress === 'number' ? localTask.progress : 0;
+          const mergedProgress = Math.max(serverProgress, localProgress);
+
+          return {
+            ...serverTask,
+            ...(localTask || {}),
+            progress: mergedProgress,
+            completed: mergedProgress >= (serverTask.target ?? localTask?.target ?? 0),
+          };
         });
-        // Если локальные задания были прогрессивнее, отправляем их на сервер
+
+        // Если локально было прогрессивнее — отправим обновлённую версию на сервер
         if (JSON.stringify(finalTasks) !== JSON.stringify(tasksFromServer)) {
           update(ref(db, `users/${userId}/dailyTasks`), {
             tasks: finalTasks,
             lastUpdateDate: today,
-            lastManualRefreshTimestamp: tasksFromLocal.timestamp || serverRefreshTimestamp,
+            lastManualRefreshTimestamp: serverRefreshTimestamp,
             version: DAILY_TASKS_VERSION,
           }).catch(e => console.warn('Не удалось синхронизировать локальные задания'));
         }
@@ -348,57 +356,98 @@ const TASKS_STORAGE_KEY = '@daily_tasks_local';
     setPendingReward(null);
   }, [pendingReward, userId, tasks]);
 
-  // Обновление прогресса задания (без изменений)
+  // Синхронизируем ref с текущим состоянием (для корректной последовательной логики)
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  // Обновление прогресса задания
   const updateProgress = async (taskType, increment = 1, gameType = null) => {
-    if (!userId) {
+    if (!userId) return;
+
+    const prevTasks = tasksRef.current;
+    if (!prevTasks || prevTasks.length === 0) {
       return;
     }
 
+    const updatedTasks = updateTaskProgress(prevTasks, taskType, increment, gameType);
 
-    let updatedTasksForDb = null;
-    let newlyCompleted = null;
-
-    setTasks(prevTasks => {
-      if (prevTasks.length === 0) {
-        return prevTasks;
-      }
-
-
-      const updatedTasks = updateTaskProgress(prevTasks, taskType, increment, gameType);
-
-
-      newlyCompleted = updatedTasks.find((task, index) =>
-        task.completed && !prevTasks[index].completed
-      );
-
-      updatedTasksForDb = updatedTasks;
-      return updatedTasks;
+    const newlyCompleted = updatedTasks.find((task, index) => {
+      const wasCompleted = prevTasks[index]?.completed;
+      return task.completed && !wasCompleted;
     });
+
+    // Важно: обновляем ref сразу, чтобы следующие вызовы updateProgress использовали уже обновлённый прогресс
+    tasksRef.current = updatedTasks;
+    setTasks(updatedTasks);
 
     if (newlyCompleted) {
       setPendingReward({ task: newlyCompleted });
     }
 
-    if (updatedTasksForDb) {
-  // 1. Сначала сохраняем локально, чтобы не потерять прогресс
-  try {
-    await AsyncStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify({
-      tasks: updatedTasksForDb,
-      lastUpdateDate: getTodayDate(),
-      timestamp: Date.now(),
-    }));
-  } catch (e) {
-    console.warn('Не удалось сохранить задания локально:', e);
-  }
+    // 1) Сначала сохраняем локально, чтобы не потерять прогресс
+    try {
+      await AsyncStorage.setItem(
+        TASKS_STORAGE_KEY,
+        JSON.stringify({
+          tasks: updatedTasks,
+          lastUpdateDate: getTodayDate(),
+          timestamp: Date.now(),
+        })
+      );
+    } catch (e) {
+      console.warn('Не удалось сохранить задания локально:', e);
+    }
 
-  // 2. Затем пытаемся отправить на сервер
-  try {
-    await update(ref(db, `users/${userId}/dailyTasks`), { tasks: updatedTasksForDb });
-  } catch (error) {
-    console.error('Ошибка синхронизации с сервером:', error);
-    // Прогресс уже сохранён локально, при следующей загрузке синхронизируем
-  }
-}
+    // 2) Затем пытаемся отправить на сервер (без отката прогресса)
+    try {
+      const today = getTodayDate();
+
+      await runTransaction(ref(db, `users/${userId}/dailyTasks`), (currentData) => {
+        if (!currentData) {
+          return {
+            tasks: updatedTasks,
+            lastUpdateDate: today,
+            version: DAILY_TASKS_VERSION,
+          };
+        }
+
+        // Не затираем задания предыдущего дня
+        if (currentData.lastUpdateDate && currentData.lastUpdateDate !== today) {
+          return currentData;
+        }
+
+        const serverTasks = Array.isArray(currentData.tasks) ? currentData.tasks : [];
+        const serverById = new Map(serverTasks.map(t => [t.id, t]));
+
+        // Монотонное объединение: serverProgress = max(server, local)
+        const mergedTasks = updatedTasks.map((localTask) => {
+          const serverTask = serverById.get(localTask.id);
+          const serverProgress = typeof serverTask?.progress === 'number' ? serverTask.progress : 0;
+          const mergedProgress = Math.max(serverProgress, localTask.progress ?? 0);
+
+          return {
+            ...localTask,
+            progress: mergedProgress,
+            completed: mergedProgress >= (localTask.target ?? 0),
+          };
+        });
+
+        // Если на сервере вдруг есть лишние задачи — сохраним их
+        const serverExtra = serverTasks.filter(t => !mergedTasks.find(mt => mt.id === t.id));
+        const finalTasks = [...mergedTasks, ...serverExtra];
+
+        return {
+          ...currentData,
+          tasks: finalTasks,
+          lastUpdateDate: today,
+          version: DAILY_TASKS_VERSION,
+        };
+      });
+    } catch (error) {
+      console.error('Ошибка синхронизации с сервером:', error);
+      // Прогресс уже сохранён локально, при следующей загрузке синхронизируем
+    }
   };
 
   const clearCompletedTask = () => {

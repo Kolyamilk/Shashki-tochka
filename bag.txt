@@ -1,5 +1,0 @@
-Сначала: checkersLogic.js, levelSystem.js, dailyTasks.js, DailyTasksContext.js
-
-Потом: MenuScreen.js, BotGameScreen.js, ExpGainModal.js, TaskCompletedModal.js
-
-И затем: ProfileScreen.js, VictoryModal.js, AuthContext.js, Firebase/API.

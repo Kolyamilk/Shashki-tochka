@@ -31,7 +31,7 @@ const MenuScreen = ({ navigation }) => {
   // Проверка подключения к Firebase
 const checkConnection = useCallback(async () => {
   if (!userId) return;
-  setCheckingConnection(true);
+  setCheckingConnection(false);
   try {
     const userRef = ref(db, `users/${userId}`);
     // Таймаут 8 секунд для более надёжной проверки
@@ -40,10 +40,10 @@ const checkConnection = useCallback(async () => {
     );
     const userSnapshot = await Promise.race([get(userRef), timeoutPromise]);
     if (userSnapshot.exists()) {
-      setIsConnected(true);
+      setIsConnected(false);
       setUserData(userSnapshot.val());
     } else {
-      setIsConnected(true); // пользователь есть в базе, значит связь точно есть
+      setIsConnected(false); // пользователь есть в базе, значит связь точно есть
     }
   } catch (error) {
     console.warn('Первая проверка не удалась, пробуем ещё раз...');
@@ -290,7 +290,13 @@ useEffect(() => {
       {/* Онлайн бейдж */}
       <TouchableOpacity
         style={[styles.onlineContainer, { top: insets.top + 10 }]}
-        onPress={() => navigation.navigate('Players')}
+        onPress={() => {
+          if (isConnected === false || isConnected === null) {
+            setShowConnectionModal(true);
+            return;
+          }
+          navigation.navigate('Players');
+        }}
         activeOpacity={0.7}
       >
         <View style={styles.onlineBadge}>
@@ -308,22 +314,6 @@ useEffect(() => {
         {/* Заголовок */}
         <View style={styles.headerSection}>
           <Text style={styles.title}>Шашки и точка</Text>
-
-          {/* Индикатор подключения */}
-          {isConnected === false && (
-            <View style={styles.connectionWarning}>
-              <Text style={styles.connectionWarningText}>⚠️ Нет подключения к интернету</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={checkConnection}
-                disabled={checkingConnection}
-              >
-                <Text style={styles.retryButtonText}>
-                  {checkingConnection ? 'Проверка...' : '🔄 Проверить подключение'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         {/* Кнопки меню */}
@@ -437,10 +427,14 @@ useEffect(() => {
               </TouchableOpacity>
             </>
           )}
-          {isConnected === false && (
-            <View style={styles.offlineOverlay}>
+          {(isConnected === false || isConnected === null) && (
+            <TouchableOpacity
+              style={styles.offlineOverlay}
+              activeOpacity={1}
+              onPress={() => setShowConnectionModal(true)}
+            >
               <Text style={styles.offlineOverlayText}>🔒 Требуется интернет</Text>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -737,7 +731,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   blurredSection: {
-    opacity: 0.5,
+    opacity: 0.9,
   },
   offlineOverlay: {
     position: 'absolute',
@@ -745,16 +739,17 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 16,
   },
   offlineOverlayText: {
-    color: '#fff',
+     opacity: 1,
+    zIndex:1111,
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-    backgroundColor: '#2c3e50',
+    backgroundColor: '#ff0000',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 12,
