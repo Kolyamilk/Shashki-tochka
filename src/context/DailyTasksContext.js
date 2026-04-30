@@ -36,7 +36,7 @@ export const DailyTasksProvider = ({ children }) => {
   const [userLevel, setUserLevel] = useState(1);
   const [nextRefreshTime, setNextRefreshTime] = useState(null);
   const [canRefresh, setCanRefresh] = useState(false);
-const TASKS_STORAGE_KEY = '@daily_tasks_local';
+const getTasksStorageKey = (uid) => `@daily_tasks_local_${uid}`;
   // Вспомогательная: конвертация старого строкового формата в timestamp
   const convertLegacyRefreshDate = (dateStr) => {
     if (!dateStr) return null;
@@ -193,7 +193,7 @@ const TASKS_STORAGE_KEY = '@daily_tasks_local';
       // Загружаем локальный кэш
       let tasksFromLocal = null;
       try {
-        const localStr = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
+        const localStr = await AsyncStorage.getItem(getTasksStorageKey(userId));
         if (localStr) {
           const localData = JSON.parse(localStr);
           if (localData.lastUpdateDate === today) {
@@ -384,7 +384,7 @@ const TASKS_STORAGE_KEY = '@daily_tasks_local';
     // 1) Сначала сохраняем локально, чтобы не потерять прогресс
     try {
       await AsyncStorage.setItem(
-        TASKS_STORAGE_KEY,
+        getTasksStorageKey(userId),
         JSON.stringify({
           tasks: updatedTasks,
           lastUpdateDate: getTodayDate(),

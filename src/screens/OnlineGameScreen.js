@@ -449,6 +449,15 @@ const endGame = useCallback(async (resultMessage, winnerId = null, loserId = nul
 
     // Проверка на ничью (две дамки)
     if (checkDrawByTwoKings(newBoard)) {
+      // Важно: выставляем флаг завершения, чтобы onValue( status==='finished' ) не начислил награды повторно
+      isGameEnding.current = true;
+
+      // Останавливаем таймер бездействия
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+
       Alert.alert('Ничья', 'На доске остались только две дамки. Игра завершена вничью.', [{ text: 'OK' }]);
 
       // Обрабатываем ничью асинхронно

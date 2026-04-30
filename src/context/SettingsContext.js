@@ -1,13 +1,16 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
 
 const SettingsContext = createContext();
 
 export const useSettings = () => useContext(SettingsContext);
 
-const SETTINGS_KEY = '@checkers_settings';
+const getSettingsStorageKey = (uid) => (uid ? `@checkers_settings_${uid}` : '@checkers_settings_default');
 
 export const SettingsProvider = ({ children }) => {
+  const { userId } = useAuth();
+
   const [boardLightColor, setBoardLightColor] = useState('#f0d9b5');
   const [boardDarkColor, setBoardDarkColor] = useState('#b58863');
   const [myPieceColor, setMyPieceColor] = useState('#FFFFFF');
@@ -17,11 +20,24 @@ export const SettingsProvider = ({ children }) => {
   const [kingCrownColor, setKingCrownColor] = useState('#FFD700');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Загрузка настроек при монтировании
+  // Загрузка настроек при монтировании / смене пользователя
   useEffect(() => {
+    const resetDefaults = () => {
+      setBoardLightColor('#f0d9b5');
+      setBoardDarkColor('#b58863');
+      setMyPieceColor('#FFFFFF');
+      setOpponentPieceColor('#333333');
+      setMyKingStyle('crown');
+      setOpponentKingStyle('rhombus');
+      setKingCrownColor('#FFD700');
+    };
+
     const loadSettings = async () => {
+      setIsLoaded(false);
       try {
-        const savedSettings = await AsyncStorage.getItem(SETTINGS_KEY);
+        resetDefaults();
+
+        const savedSettings = await AsyncStorage.getItem(getSettingsStorageKey(userId));
         if (savedSettings) {
           const settings = JSON.parse(savedSettings);
           if (settings.boardLightColor) setBoardLightColor(settings.boardLightColor);
@@ -38,8 +54,9 @@ export const SettingsProvider = ({ children }) => {
         setIsLoaded(true);
       }
     };
+
     loadSettings();
-  }, []);
+  }, [userId]);
 
   // Сохранение настроек при изменении
   useEffect(() => {
@@ -55,13 +72,13 @@ export const SettingsProvider = ({ children }) => {
           opponentKingStyle,
           kingCrownColor,
         };
-        await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        await AsyncStorage.setItem(getSettingsStorageKey(userId), JSON.stringify(settings));
       } catch (error) {
         console.error('Ошибка сохранения настроек:', error);
       }
     };
     saveSettings();
-  }, [boardLightColor, boardDarkColor, myPieceColor, opponentPieceColor, myKingStyle, opponentKingStyle, kingCrownColor, isLoaded]);
+  }, [boardLightColor, boardDarkColor, myPieceColor, opponentPieceColor, myKingStyle, opponentKingStyle, kingCrownColor, isLoaded, userId]);
 
   return (
     <SettingsContext.Provider
