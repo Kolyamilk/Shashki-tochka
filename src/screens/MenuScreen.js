@@ -31,7 +31,7 @@ const MenuScreen = ({ navigation }) => {
   // Проверка подключения к Firebase
 const checkConnection = useCallback(async () => {
   if (!userId) return;
-  setCheckingConnection(false);
+  setCheckingConnection(true);
   try {
     const userRef = ref(db, `users/${userId}`);
     // Таймаут 8 секунд для более надёжной проверки
@@ -39,14 +39,17 @@ const checkConnection = useCallback(async () => {
       setTimeout(() => reject(new Error('Timeout')), 8000)
     );
     const userSnapshot = await Promise.race([get(userRef), timeoutPromise]);
+
+    // Если запрос дошёл до Firebase и вернул snapshot — значит связь есть.
     if (userSnapshot.exists()) {
-      setIsConnected(false);
+      setIsConnected(true);
       setUserData(userSnapshot.val());
     } else {
-      setIsConnected(false); // пользователь есть в базе, значит связь точно есть
+      setIsConnected(true);
+      setUserData(null);
     }
   } catch (error) {
-    console.warn('Первая проверка не удалась, пробуем ещё раз...');
+    console.warn('Проверка не удалась, пробуем ещё раз...');
     // Одна повторная попытка
     try {
       const userRef = ref(db, `users/${userId}`);
@@ -54,15 +57,18 @@ const checkConnection = useCallback(async () => {
         setTimeout(() => reject(new Error('Timeout')), 8000)
       );
       const userSnapshot = await Promise.race([get(userRef), timeoutPromise]);
+
       if (userSnapshot.exists()) {
         setIsConnected(true);
         setUserData(userSnapshot.val());
       } else {
         setIsConnected(true);
+        setUserData(null);
       }
     } catch (secondError) {
       console.error('Ошибка подключения после повтора:', secondError);
       setIsConnected(false);
+      setUserData(null);
     }
   } finally {
     setCheckingConnection(false);
@@ -441,17 +447,21 @@ useEffect(() => {
         {/* Нижняя панель */}
         <View style={styles.bottomPanel}>
           <TouchableOpacity
-  style={styles.profileButton}
-  onPress={() => {
-    if (isConnected === true) {
-      navigation.navigate('Profile');
-    } else {
-      setShowConnectionModal(true);
-    }
-  }}
-  activeOpacity={0.8}
->
-            {userData ? (
+            style={styles.profileButton}
+            onPress={() => {
+              if (isConnected === true) {
+                navigation.navigate('Profile');
+              } else {
+                setShowConnectionModal(true);
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            {isConnected === false || isConnected === null ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ color: colors.textWarning, fontSize: 16, fontWeight: '700' }}>🔒 Офлайн</Text>
+              </View>
+            ) : userData ? (
               <View style={styles.profileInfo}>
                 <View style={styles.avatarContainer}>
                   <Text style={styles.avatar}>{userData.avatar}</Text>
@@ -469,7 +479,12 @@ useEffect(() => {
                     )}
                   </View>
                   <View style={styles.levelContainer}>
-                    <Text style={[styles.levelText, { color: getLevelColor(getLevelFromExp(userData.stats?.exp || 0).level) }]}>
+                    <Text
+                      style={[
+                        styles.levelText,
+                        { color: getLevelColor(getLevelFromExp(userData.stats?.exp || 0).level) },
+                      ]}
+                    >
                       Ур. {getLevelFromExp(userData.stats?.exp || 0).level}
                     </Text>
                   </View>
@@ -744,12 +759,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   offlineOverlayText: {
-     opacity: 1,
-    zIndex:1111,
+
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
-    backgroundColor: '#ff0000',
+    backgroundColor: '#ff4433',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 12,
