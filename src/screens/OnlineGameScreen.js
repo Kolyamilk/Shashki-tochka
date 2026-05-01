@@ -886,6 +886,36 @@ const endGame = useCallback(async (resultMessage, winnerId = null, loserId = nul
     };
   }, [gameData, playerKey, endGame]);
 
+  // Если пропал интернет — сразу возвращаем на главное меню (чтобы не "зависнуть" в экране игры)
+  useEffect(() => {
+    if (!gameData) return;
+
+    const connectedRef = ref(db, '.info/connected');
+    const unsubscribe = onValue(connectedRef, (snapshot) => {
+      const connected = snapshot.val() === true;
+
+      if (!connected && !isGameEnding.current) {
+        isGameEnding.current = true;
+
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current);
+          inactivityTimerRef.current = null;
+        }
+
+        // сбрасываем флаги приглашений и уходим на Menu
+        try {
+          resetInviteFlags();
+        } catch {
+          // noop
+        }
+
+        navigation.replace('Menu');
+      }
+    });
+
+    return () => unsubscribe?.();
+  }, [gameData, navigation, resetInviteFlags]);
+
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => { handleGiveUp(); return true; };

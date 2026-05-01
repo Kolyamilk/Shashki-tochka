@@ -80,6 +80,43 @@ const checkConnection = useCallback(async () => {
     checkConnection();
   }, [checkConnection]);
 
+  // Слушаем реальное состояние подключения к интернету через Firebase.
+  // Если интернет пропал — переключаемся в офлайн-режим (как при isConnected === false).
+  useEffect(() => {
+    const firebaseConnectionRef = ref(db, '.info/connected');
+
+    const unsubscribe = onValue(
+      firebaseConnectionRef,
+      (snapshot) => {
+        const connected = snapshot.val() === true;
+
+        if (!connected) {
+          setIsConnected(false);
+          setUserData(null);
+          setHasNewGifts(false);
+          setLatestGiftEmoji('');
+          return;
+        }
+
+        // Подключение восстановлено.
+        setIsConnected(true);
+
+        // Догружаем актуальные данные пользователя (если экран активен/пользователь есть).
+        // checkConnection делает проверку get(users/:id) с таймаутом и обновляет userData.
+        checkConnection();
+      },
+      (error) => {
+        console.error('Ошибка слушателя .info/connected:', error);
+      }
+    );
+
+    return () => {
+      // В этой части проекта используется off(ref) вместо вызова unsubscribe()
+      // — оставляю в стиле текущего кода.
+      off(firebaseConnectionRef);
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [checkConnection]);
   // Закрываем модальное окно при успешном подключении
   useEffect(() => {
     if (isConnected === true && showConnectionModal) {
