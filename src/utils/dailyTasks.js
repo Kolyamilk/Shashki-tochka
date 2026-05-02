@@ -185,8 +185,8 @@ const TASK_TEMPLATES = [
   {
     id: 'win_bot_medium',
     type: TASK_TYPES.WIN_BOT_MEDIUM,
-    title: 'Победитель тяжелого',
-    description: 'Выиграйте у бота "Тяжелый"',
+    title: 'Победитель среднего',
+    description: 'Выиграйте у бота "Средний"',
     target: 1,
     icon: '🎯',
   },
