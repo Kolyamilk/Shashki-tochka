@@ -95,78 +95,79 @@ const BotGameScreen = ({ route, navigation }) => {
   const player2Captured = initialPiecesCount - player1Pieces;
 
   // ---- ВЫНОСИМ endGame НА УРОВЕНЬ КОМПОНЕНТА (useCallback) ----
-  const endGame = useCallback(async (resultMessage, winner = null, isTimeout = false, isSurrender = false) => {
-    if (gameOver) return;
-    setGameOver(true);
+const endGame = useCallback(async (resultMessage, winner = null, isTimeout = false, isSurrender = false) => {
+  if (gameOver) return;
+  setGameOver(true);
 
-    if (isTimeout && winner === 2) {
-      Alert.alert(
-        'Время вышло',
-        'Вы не сделали ход в течение 1 минуты и автоматически проиграли.',
-        [{ text: 'OK' }]
-      );
-    }
+  if (isTimeout && winner === 2) {
+    Alert.alert(
+      'Время вышло',
+      'Вы не сделали ход в течение 1 минуты и автоматически проиграли.',
+      [{ text: 'OK' }]
+    );
+  }
 
-    // Если интернета нет — не выполняем любые firebase-запросы,
-    // чтобы endGame не подвисал и модалка "Вы сдались/проиграли/выиграли" показывалась сразу.
-    if (!isFirebaseConnectedRef.current) {
-      const isWin = winner === 1;
-      setVictoryData({
-        isWin,
-        expGained: 0,
-        oldExp: 0,
-        hasNewGift: false,
-        playerSurrendered: isSurrender,
-        isDraw: winner === null,
-      });
-      setVictoryModalVisible(true);
-      return;
-    }
-
-    let expGained = 0;
-    let oldExp = 0;
-    let hasNewGift = false;
+  // Если интернета нет — не выполняем firebase-запросы
+  if (!isFirebaseConnectedRef.current) {
     const isWin = winner === 1;
+    setVictoryData({
+      isWin,
+      expGained: 0,
+      oldExp: 0,
+      hasNewGift: false,
+      playerSurrendered: isSurrender,
+      isDraw: winner === null,
+    });
+    setVictoryModalVisible(true);
+    return;
+  }
 
-    // Начисление опыта и обновление статистики
-    if (userId && winner !== null) {
-      try {
-        const userStatsRef = ref(db, `users/${userId}/stats`);
-        const statsSnap = await get(userStatsRef);
-        const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
-        const currentExp = stats.exp || 0;
-        const currentTotalGames = stats.totalGames || 0;
-        const currentWins = stats.wins || 0;
-        oldExp = currentExp;
+  let expGained = 0;
+  let oldExp = 0;
+  let hasNewGift = false;
+  const isWin = winner === 1;
 
-        if (winner === 1) {
-          if (isFakeOpponent) {
-            expGained = EXP_REWARDS.WIN_ONLINE;
-          } else {
-            if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
-            else if (difficulty === 'medium') expGained = EXP_REWARDS.WIN_BOT_MEDIUM;
-            else if (difficulty === 'hard') expGained = EXP_REWARDS.WIN_BOT_HARD;
-            else if (difficulty === 'grandmaster') expGained = EXP_REWARDS.WIN_BOT_GRANDMASTER;
-          }
-        } else if (winner === 2) {
-          // Если игрок сдался — опыт не начисляется
-          if (isSurrender) {
-            expGained = 0;
-          } else if (isFakeOpponent) {
-            expGained = EXP_REWARDS.LOSE_ONLINE;
-          } else {
-            expGained = EXP_REWARDS.LOSE_BOT;
-          }
+  // Начисление опыта и обновление статистики
+  if (userId && winner !== null) {
+    try {
+      const userStatsRef = ref(db, `users/${userId}/stats`);
+      const statsSnap = await get(userStatsRef);
+      const stats = statsSnap.val() || { totalGames: 0, wins: 0, exp: 0 };
+      const currentExp = stats.exp || 0;
+      const currentTotalGames = stats.totalGames || 0;
+      const currentWins = stats.wins || 0;
+      oldExp = currentExp;
+
+      if (winner === 1) {
+        if (isFakeOpponent) {
+          expGained = EXP_REWARDS.WIN_ONLINE;
+        } else {
+          if (difficulty === 'easy') expGained = EXP_REWARDS.WIN_BOT_EASY;
+          else if (difficulty === 'medium') expGained = EXP_REWARDS.WIN_BOT_MEDIUM;
+          else if (difficulty === 'hard') expGained = EXP_REWARDS.WIN_BOT_HARD;
+          else if (difficulty === 'grandmaster') expGained = EXP_REWARDS.WIN_BOT_GRANDMASTER;
         }
+      } else if (winner === 2) {
+        // Если игрок сдался — опыт не начисляется
+        if (isSurrender) {
+          expGained = 0;
+        } else if (isFakeOpponent) {
+          expGained = EXP_REWARDS.LOSE_ONLINE;
+        } else {
+          expGained = EXP_REWARDS.LOSE_BOT;
+        }
+      }
 
-        const updatedStats = {
-          totalGames: currentTotalGames + 1,
-          exp: currentExp + expGained,
-        };
-        if (winner === 1) updatedStats.wins = currentWins + 1;
-        await update(userStatsRef, updatedStats);
+      // Статистика (totalGames увеличивается всегда, даже при сдаче — опционально)
+      const updatedStats = {
+        totalGames: currentTotalGames + 1,
+        exp: currentExp + expGained,
+      };
+      if (winner === 1) updatedStats.wins = currentWins + 1;
+      await update(userStatsRef, updatedStats);
 
-        // Обновление серии побед
+      // Обновление серии побед и ежедневных заданий (только если не сдался)
+      if (!isSurrender) {
         try {
           const userRef = ref(db, `users/${userId}`);
           const userSnap = await get(userRef);
@@ -217,57 +218,59 @@ const BotGameScreen = ({ route, navigation }) => {
         if (capturedByPlayer > 0) {
           await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
         }
+      }
 
-        // История опыта
-        const expHistoryRef = ref(db, `users/${userId}/expHistory`);
-        const historySnap = await get(expHistoryRef);
-        const history = historySnap.val() || [];
-        const difficultyNames = { easy: 'Легкий', medium: 'Средний', hard: 'Сложный', grandmaster: 'Гроссмейстер' };
-        const newEntry = {
-          timestamp: Date.now(),
-          gameType: gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
-          opponent: isFakeOpponent ? `${opponentName} (Ур. ${opponentLevel})` : `Бот (${difficultyNames[difficulty]})`,
-          result: winner === 1 ? 'win' : 'lose',
-          expGained,
-        };
-        history.unshift(newEntry);
-        if (history.length > 50) history.pop();
+      // История опыта (пишем всегда, даже при сдаче, но с нулевым опытом)
+      const expHistoryRef = ref(db, `users/${userId}/expHistory`);
+      const historySnap = await get(expHistoryRef);
+      const history = historySnap.val() || [];
+      const difficultyNames = { easy: 'Легкий', medium: 'Средний', hard: 'Сложный', grandmaster: 'Гроссмейстер' };
+      const newEntry = {
+        timestamp: Date.now(),
+        gameType: gameType === 'giveaway' ? 'Поддавки' : 'Русские шашки',
+        opponent: isFakeOpponent ? `${opponentName} (Ур. ${opponentLevel})` : `Бот (${difficultyNames[difficulty]})`,
+        result: winner === 1 ? 'win' : 'lose',
+        expGained,
+      };
+      history.unshift(newEntry);
+      if (history.length > 50) history.pop();
 
-        const oldLevel = getLevelFromExp(oldExp).level;
-        const newLevel = getLevelFromExp(oldExp + expGained).level;
-        const leveledUp = newLevel > oldLevel;
+      const oldLevel = getLevelFromExp(oldExp).level;
+      const newLevel = getLevelFromExp(oldExp + expGained).level;
+      const leveledUp = newLevel > oldLevel;
 
-        const updateData = { expHistory: history };
-        if (leveledUp) {
+      const updateData = { expHistory: history };
+      if (leveledUp) {
+        const userRef = ref(db, `users/${userId}`);
+        const userSnap = await get(userRef);
+        const userData = userSnap.val() || {};
+        const currentTokens = userData.taskRefreshTokens || 0;
+        updateData.taskRefreshTokens = currentTokens + 1;
+      }
+      if (leveledUp && newLevel % 5 === 0 && newLevel >= 5) {
+        const { LEVEL_GIFTS } = require('../utils/giftSystem');
+        if (LEVEL_GIFTS[newLevel]) {
           const userRef = ref(db, `users/${userId}`);
           const userSnap = await get(userRef);
           const userData = userSnap.val() || {};
-          const currentTokens = userData.taskRefreshTokens || 0;
-          updateData.taskRefreshTokens = currentTokens + 1;
-        }
-        if (leveledUp && newLevel % 5 === 0 && newLevel >= 5) {
-          const { LEVEL_GIFTS } = require('../utils/giftSystem');
-          if (LEVEL_GIFTS[newLevel]) {
-            const userRef = ref(db, `users/${userId}`);
-            const userSnap = await get(userRef);
-            const userData = userSnap.val() || {};
-            const newGifts = userData.newGifts || [];
-            const giftId = `gift_level_${newLevel}`;
-            if (!newGifts.includes(giftId)) {
-              updateData.newGifts = [...newGifts, giftId];
-              hasNewGift = true;
-            }
+          const newGifts = userData.newGifts || [];
+          const giftId = `gift_level_${newLevel}`;
+          if (!newGifts.includes(giftId)) {
+            updateData.newGifts = [...newGifts, giftId];
+            hasNewGift = true;
           }
         }
-        await update(ref(db, `users/${userId}`), updateData);
-      } catch (error) {
-        console.error('Ошибка начисления опыта:', error);
       }
+      await update(ref(db, `users/${userId}`), updateData);
+    } catch (error) {
+      console.error('Ошибка начисления опыта:', error);
     }
+  }
 
-    // Ничья (обновление заданий без опыта)
-    if (userId && winner === null) {
-      try {
+  // Ничья (обновление заданий тоже только если не сдался — но сдача не вызывает ничью)
+  if (userId && winner === null) {
+    try {
+      if (!isSurrender) {
         const userRef = ref(db, `users/${userId}`);
         const userSnap = await get(userRef);
         const userData = userSnap.val() || {};
@@ -283,24 +286,32 @@ const BotGameScreen = ({ route, navigation }) => {
         if (capturedByPlayer > 0) {
           await updateProgress(TASK_TYPES.CAPTURE_PIECES, capturedByPlayer);
         }
-      } catch (error) {
-        console.error('Ошибка обновления заданий при ничьей:', error);
       }
+    } catch (error) {
+      console.error('Ошибка обновления заданий при ничьей:', error);
     }
+  }
 
-    if (gameIdRef.current) {
-      const botGameRef = ref(db, `bot_games/${gameIdRef.current}`);
-      await update(botGameRef, {
-        status: 'finished',
-        finishedAt: Date.now(),
-        result: winner === 1 ? 'player_win' : (winner === 2 ? 'bot_win' : 'draw'),
-      }).catch(console.error);
-    }
+  if (gameIdRef.current) {
+    const botGameRef = ref(db, `bot_games/${gameIdRef.current}`);
+    await update(botGameRef, {
+      status: 'finished',
+      finishedAt: Date.now(),
+      result: winner === 1 ? 'player_win' : (winner === 2 ? 'bot_win' : 'draw'),
+    }).catch(console.error);
+  }
 
-    await new Promise(resolve => setTimeout(resolve, 150));
-    setVictoryData({ isWin, expGained, oldExp, hasNewGift, playerSurrendered: isSurrender, isDraw: winner === null });
-    setVictoryModalVisible(true);
-  }, [gameOver, userId, board, difficulty, gameType, opponentName, opponentLevel, isFakeOpponent, updateProgress, TASK_TYPES, player2Pieces]);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  setVictoryData({
+    isWin,
+    expGained,
+    oldExp,
+    hasNewGift,
+    playerSurrendered: isSurrender,
+    isDraw: winner === null,
+  });
+  setVictoryModalVisible(true);
+}, [gameOver, userId, board, difficulty, gameType, opponentName, opponentLevel, isFakeOpponent, updateProgress, TASK_TYPES, player2Pieces]);
 
   // ---- Эффект создания игры в базе ----
   useEffect(() => {
