@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,10 +21,11 @@ import { useAuth } from '../context/AuthContext';
 const LoginScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { userId, login } = useAuth();
   const insets = useSafeAreaInsets();
 
-  // Переход на Menu после успешного входа
   useEffect(() => {
     if (userId) {
       navigation.reset({
@@ -39,11 +41,22 @@ const LoginScreen = ({ navigation }) => {
       return;
     }
 
+    setLoading(true);
+    setErrorMessage('');
+
     try {
       const usersRef = ref(db, 'users');
-      const snapshot = await get(usersRef);
+
+      // Таймаут 5 секунд
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('TIMEOUT')), 5000)
+      );
+
+      const snapshot = await Promise.race([get(usersRef), timeoutPromise]);
+
       if (!snapshot.exists()) {
-        Alert.alert('Ошибка', 'Пользователь не найден');
+        setErrorMessage('Пользователь не найден');
+        setLoading(false);
         return;
       }
 
@@ -58,12 +71,17 @@ const LoginScreen = ({ navigation }) => {
 
       if (foundUserId) {
         login(foundUserId);
+        // Успешный вход – loading останется true до перехода, но это нормально
       } else {
-        Alert.alert('Ошибка', 'Неверное имя или пароль');
+        setErrorMessage('Неверное имя или пароль');
+        setLoading(false);
       }
     } catch (error) {
-      console.error(error);
-      Alert.alert('Ошибка', 'Не удалось войти');
+      if (error.message !== 'TIMEOUT') {
+        console.error(error);
+      }
+      setErrorMessage('Не получилось соединиться. Проверьте доступ к интернету.');
+      setLoading(false);
     }
   };
 
@@ -84,6 +102,7 @@ const LoginScreen = ({ navigation }) => {
           placeholderTextColor="#aaa"
           value={name}
           onChangeText={setName}
+          editable={!loading}
         />
 
         <TextInput
@@ -93,15 +112,32 @@ const LoginScreen = ({ navigation }) => {
           secureTextEntry
           value={password}
           onChangeText={setPassword}
+          editable={!loading}
         />
 
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Войти</Text>
+        {errorMessage ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.buttonText}>Войти</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.registerLink}
           onPress={() => navigation.navigate('Register')}
+          disabled={loading}
         >
           <Text style={styles.linkText}>Нет аккаунта? Зарегистрироваться</Text>
         </TouchableOpacity>
@@ -135,12 +171,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 20,
   },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 0, 0, 0.15)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   loginButton: {
     backgroundColor: colors.primary,
     padding: 15,
     borderRadius: 30,
     alignItems: 'center',
     marginBottom: 20,
+    minHeight: 50,
+    justifyContent: 'center',
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',

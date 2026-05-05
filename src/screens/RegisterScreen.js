@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -27,13 +28,13 @@ const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(avatars[0]);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { userId, login } = useAuth();
   const insets = useSafeAreaInsets();
 
-  // Если userId появился (после вызова login) – переходим в Menu
   useEffect(() => {
     if (userId) {
-      // Сбрасываем стек навигации, чтобы Menu стал корневым экраном
       navigation.reset({
         index: 0,
         routes: [{ name: 'Menu' }],
@@ -47,6 +48,9 @@ const RegisterScreen = ({ navigation }) => {
       return;
     }
 
+    setLoading(true);
+    setErrorMessage('');
+
     try {
       const usersRef = ref(db, 'users');
       const newUserRef = push(usersRef);
@@ -54,7 +58,7 @@ const RegisterScreen = ({ navigation }) => {
 
       const userData = {
         name: name.trim(),
-        password: password.trim(), // В реальном приложении пароль нужно хэшировать!
+        password: password.trim(),
         avatar: selectedAvatar,
         stats: {
           totalGames: 0,
@@ -72,11 +76,20 @@ const RegisterScreen = ({ navigation }) => {
         },
       };
 
-      await set(newUserRef, userData);
-      login(userId); // обновляем контекст – это вызовет useEffect выше
+      // Таймаут 5 секунд
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('TIMEOUT')), 5000)
+      );
+
+      await Promise.race([set(newUserRef, userData), timeoutPromise]);
+      login(userId);
+      // Успех – переход будет выполнен через useEffect
     } catch (error) {
-      console.error(error);
-      Alert.alert('Ошибка', 'Не удалось зарегистрироваться');
+      if (error.message !== 'TIMEOUT') {
+        console.error(error);
+      }
+      setErrorMessage('Не получилось соединиться. Проверьте доступ к интернету.');
+      setLoading(false);
     }
   };
 
@@ -97,6 +110,7 @@ const RegisterScreen = ({ navigation }) => {
           placeholderTextColor="#aaa"
           value={name}
           onChangeText={setName}
+          editable={!loading}
         />
 
         <TextInput
@@ -106,6 +120,7 @@ const RegisterScreen = ({ navigation }) => {
           secureTextEntry
           value={password}
           onChangeText={setPassword}
+          editable={!loading}
         />
 
         <Text style={styles.label}>Выберите аватар:</Text>
@@ -119,18 +134,36 @@ const RegisterScreen = ({ navigation }) => {
                 selectedAvatar === avatar && styles.selectedAvatar,
               ]}
               onPress={() => setSelectedAvatar(avatar)}
+              disabled={loading}
             >
               <Text style={styles.avatarEmoji}>{avatar}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Зарегистрироваться</Text>
+        {errorMessage ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.registerButton, loading && styles.registerButtonDisabled]}
+          onPress={handleRegister}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.buttonText}>Зарегистрироваться</Text>
+          )}
         </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.loginLink}
           onPress={() => navigation.navigate('Login')}
+          disabled={loading}
         >
           <Text style={styles.linkText}>Уже есть аккаунт? Войти</Text>
         </TouchableOpacity>
@@ -200,11 +233,30 @@ const styles = StyleSheet.create({
   avatarEmoji: {
     fontSize: 28,
   },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 0, 0, 0.15)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   registerButton: {
     backgroundColor: colors.primary,
     padding: 15,
     borderRadius: 30,
     alignItems: 'center',
+    minHeight: 50,
+    justifyContent: 'center',
+  },
+  registerButtonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
@@ -212,14 +264,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   loginLink: {
-  alignItems: 'center',
-  marginTop: 15,
-},
-linkText: {
-  color: colors.primary,
-  fontSize: 16,
-  textDecorationLine: 'underline',
-},
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  linkText: {
+    color: colors.primary,
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
 });
 
 export default RegisterScreen;
