@@ -53,28 +53,32 @@ const ProfileScreen = ({ navigation }) => {
   loadProfile();
 }, [userId]);
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Выход',
-      'Вы уверены, что хотите выйти?',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Выйти',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-              // После выхода контекст обновится, и навигация автоматически переключится на Login (см. App.js)
-            } catch (error) {
-              console.error('Ошибка при выходе:', error);
-              Alert.alert('Ошибка', 'Не удалось выйти из аккаунта');
-            }
-          },
+const handleLogout = () => {
+  Alert.alert(
+    'Выход',
+    'Вы уверены, что хотите выйти?',
+    [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Выйти',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await logout();
+            // Принудительно сбрасываем навигацию на экран логина
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } catch (error) {
+            console.error('Ошибка при выходе:', error);
+            Alert.alert('Ошибка', 'Не удалось выйти из аккаунта');
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
   const goBack = () => {
     navigation.navigate('Menu');
