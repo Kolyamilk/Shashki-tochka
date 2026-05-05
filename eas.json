@@ -13,8 +13,7 @@
     "production": {
       "android": {
         "buildType": "apk",
-        "credentialsSource": "local",
-        "appVersionSource": "local"
+        "credentialsSource": "local"
       }
     }
   },
