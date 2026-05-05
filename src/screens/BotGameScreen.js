@@ -9,6 +9,7 @@ import Board from '../components/Board';
 import VictoryModal from '../components/VictoryModal';
 import { useSettings } from '../context/SettingsContext';
 import { useGameType } from '../context/GameTypeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   initialBoard,
   getValidMovesForPiece,
@@ -33,7 +34,7 @@ const BotGameScreen = ({ route, navigation }) => {
   const { gameType } = useGameType();
   const { resetInviteFlags } = useInvite();
   const { updateProgress, TASK_TYPES } = useDailyTasks();
-
+  const insets = useSafeAreaInsets();
   const [board, setBoard] = useState(initialBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
   const [selectedCell, setSelectedCell] = useState(null);
@@ -694,7 +695,7 @@ const endGame = useCallback(async (resultMessage, winner = null, isTimeout = fal
         ))}
       </View>
 
-      <View style={styles.playerInfo}>
+      <View style={[styles.playerInfo, { bottom: insets.bottom + 70 }]}>
         <Text style={styles.playerAvatar}>{myAvatar}</Text>
         <View style={styles.playerDetails}>
           <Text style={styles.playerName}>{myName}</Text>
@@ -708,12 +709,12 @@ const endGame = useCallback(async (resultMessage, winner = null, isTimeout = fal
       </View>
 
       {isMyTurn && timeRemaining <= 30 && (
-        <View style={[styles.timerContainer, timeRemaining < 30 && styles.timerContainerWarning]}>
+        <View style={[styles.timerContainer, timeRemaining < 30 && styles.timerContainerWarning, { bottom: insets.bottom + 150 }]}>
           <Text style={styles.timerText}>⏱️ {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}</Text>
         </View>
       )}
 
-      <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
+      <TouchableOpacity style={[styles.giveUpButton, { bottom: insets.bottom + 20 }]} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
 
@@ -776,7 +777,7 @@ const styles = StyleSheet.create({
   opponentDetails: { flexDirection: 'column', marginRight: 10 },
   playerInfo: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 90, 
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2c3e50',
@@ -793,7 +794,7 @@ const styles = StyleSheet.create({
   turnBadgeText: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
   timerContainer: {
     position: 'absolute',
-    bottom: 140,
+    bottom:140,       // таймер выше, чтобы не накладываться на playerInfo
     backgroundColor: '#FFC107',
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -809,7 +810,7 @@ const styles = StyleSheet.create({
   timerText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
   giveUpButton: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 30,        // кнопка над системной панелью, не перекрывается
     backgroundColor: '#FF6B6B',
     paddingVertical: 10,
     paddingHorizontal: 24,

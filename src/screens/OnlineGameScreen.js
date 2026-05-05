@@ -8,6 +8,7 @@ import Board from '../components/Board';
 import VictoryModal from '../components/VictoryModal';
 import { useInvite } from '../context/InviteContext';
 import { useDailyTasks } from '../context/DailyTasksContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   initialBoard,
   getValidMovesForPiece,
@@ -201,7 +202,7 @@ const OnlineGameScreen = ({ route, navigation }) => {
   const [victoryModalVisible, setVictoryModalVisible] = useState(false);
   const [victoryData, setVictoryData] = useState({ isWin: false, expGained: 0, oldExp: 0, opponentLeft: false, hasNewGift: false, playerSurrendered: false, isDraw: false });
   const [timeRemaining, setTimeRemaining] = useState(60); // 1 минута в секундах
-
+  const insets = useSafeAreaInsets();
   const [animatingMove, setAnimatingMove] = useState(null);
   const [pendingBoard, setPendingBoard] = useState(null);
   const [pendingMove, setPendingMove] = useState(null);
@@ -1075,7 +1076,7 @@ const handleGiveUp = async () => {
         ))}
       </View>
 
-      <View style={styles.playerInfo}>
+      <View style={[styles.playerInfo, { bottom: insets.bottom + 70 }]}>
         <Text style={styles.playerAvatar}>{myAvatar || '😀'}</Text>
         <View style={styles.playerDetails}>
           <Text style={styles.playerName}>{myName || 'Вы'}</Text>
@@ -1092,14 +1093,14 @@ const handleGiveUp = async () => {
 
       {/* Таймер отдельно над панелью игрока */}
       {isMyTurn && timeRemaining <= 30 && (
-        <View style={[styles.timerContainer, timeRemaining <= 10 && styles.timerContainerWarning]}>
+        <View style={[styles.timerContainer, timeRemaining < 30 && styles.timerContainerWarning, { bottom: insets.bottom + 150 }]}>
           <Text style={styles.timerText}>
             ⏱️ {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
           </Text>
         </View>
       )}
 
-      <TouchableOpacity style={styles.giveUpButton} onPress={handleGiveUp}>
+      <TouchableOpacity style={[styles.giveUpButton, { bottom: insets.bottom + 20 }]} onPress={handleGiveUp}>
         <Text style={styles.giveUpText}>🚪 Сдаться</Text>
       </TouchableOpacity>
 
